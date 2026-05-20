@@ -70,3 +70,16 @@ button:disabled { background: #10b981; cursor: default; }
 .line.sys { color: #6b7280; font-style: italic; font-size: 12px; align-self: center; }
 .composer { display: flex; gap: 8px; }
 .composer input { flex: 1 1 auto; }
+.filerow { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.filebtn {
+  display: inline-block;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: 600 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.filebtn:hover { background: #6d28d9; }
+.filehint { font-size: 12px; color: #6b7280; }
+.line a { color: #1d4ed8; }

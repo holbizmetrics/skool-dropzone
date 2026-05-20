@@ -44,13 +44,56 @@
     else setStatus("waiting", `${lock} · waiting for another tab…`);
   }
 
+  const incoming = new Map(); // id -> { name, type, total, parts[], received }
+
   function onMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
-    if (obj.kind === "undecryptable") {
-      addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");
-      return;
+    switch (obj.kind) {
+      case "undecryptable":
+        addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");
+        break;
+      case "text":
+        addLine("them", "peer: " + obj.body);
+        break;
+      case "file-start":
+        incoming.set(obj.id, { name: obj.name, type: obj.type, total: obj.total, parts: new Array(obj.total), received: 0 });
+        addLine("sys", `receiving "${obj.name}" (0%)`);
+        break;
+      case "file-chunk": {
+        const t = incoming.get(obj.id);
+        if (!t) break;
+        if (t.parts[obj.seq] === undefined) {
+          t.parts[obj.seq] = obj.data;
+          t.received++;
+        }
+        break;
+      }
+      case "file-end": {
+        const t = incoming.get(obj.id);
+        if (!t) break;
+        const bufs = t.parts.map((b) => window.SDZCrypto.fromB64(b || ""));
+        let len = 0;
+        bufs.forEach((b) => (len += b.length));
+        const all = new Uint8Array(len);
+        let off = 0;
+        bufs.forEach((b) => {
+          all.set(b, off);
+          off += b.length;
+        });
+        const blob = new Blob([all], { type: t.type || "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const li = document.createElement("li");
+        li.className = "line them";
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = t.name;
+        a.textContent = `⬇ download "${t.name}" (${len} bytes)`;
+        li.appendChild(a);
+        document.getElementById("log").appendChild(li);
+        incoming.delete(obj.id);
+        break;
+      }
     }
-    if (obj.kind === "text") addLine("them", "peer: " + obj.body);
   }
 
   $("join").addEventListener("click", async () => {
@@ -83,5 +126,27 @@
     addLine("me", "you: " + text);
     if (connected) window.SDZTransport.send({ kind: "text", body: text });
     $("msg").value = "";
+  });
+
+  $("file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!connected) {
+      addLine("sys", "join a room first, then send a file");
+      return;
+    }
+    const li = document.createElement("li");
+    li.className = "line me";
+    li.textContent = `sending "${f.name}" 0%`;
+    document.getElementById("log").appendChild(li);
+    try {
+      await window.SDZTransport.sendFile(f, (p) => {
+        li.textContent = `sending "${f.name}" ${Math.round(p * 100)}%`;
+      });
+      li.textContent = `sent "${f.name}" ✓`;
+    } catch (err) {
+      li.textContent = `send failed: ${err}`;
+    }
   });
 })();
