@@ -22,18 +22,30 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ## Phase 1 — Meeting-page detection ★
 
-**Goal:** Extension knows when you're in a meeting page specifically and injects a panel only there.
+**Goal:** Extension knows when you're in a meeting and injects a panel only then.
 
-- Capture URL pattern of a live Skool meeting page (operator paste)
-- Capture DOM snippet around the meeting container (operator paste)
-- Narrow the content script to fire only on meeting URLs
-- Replace marker with an empty side panel docked to the meeting view
-- Mutation observer to handle SPA route changes (panel appears/disappears with meeting view)
+**Strategy update (from competitor reverse-engineering, 2026-05-20):**
 
-**Done when:** open a Skool meeting → panel appears; navigate away → panel disappears; navigate back → panel reappears.
+The competing "Skool Extensions" extension (`jinaapgibcgkfaffmpkhdikncmfhpfne`) uses **no URL-level gating** — its manifest matches all of `*.skool.com/*` and detects meeting state at runtime via the DOM and WebSocket traffic. We follow the same approach because:
+
+- Skool is a Next.js SPA. The React root is `#__next`.
+- Skool meetings render via [Stream.io's Video React SDK](https://getstream.io/video/). The Stream SDK uses a stable CSS class prefix: `str-video__*` (e.g. `.str-video__participant-listing-item`, `.str-video__participant-listing-item__display-name`).
+- This means detection is a single DOM check: *is a `.str-video__*` element present?* When yes, we're in a meeting.
+- Skool meeting signaling flows as JSON over WebSocket to `stream-io-api.com` (event types like `call.reaction_new` carry per-event payload).
+
+**Implementation:**
+
+- Keep manifest match at `https://*.skool.com/*` (already done in Phase 0).
+- Add a runtime meeting-detector that uses a `MutationObserver` to watch for Stream's call container appearing/disappearing in the DOM.
+- When detected: remove the SDZ marker, mount an empty side panel docked to the meeting view (right edge, full height).
+- When detector says "no longer in meeting" (Stream DOM gone): unmount panel.
+
+**Done when:** open a Skool meeting → panel appears within ~1s; leave the meeting (Stream UI tears down) → panel disappears.
 
 **Open decisions:**
-- Where does the panel dock — right edge / floating / replacing chat?
+- Which exact Stream selector is the most reliable detection target (the call container vs participant listing — to be verified in a live meeting)
+- Where does the panel dock — right edge (default plan) / floating / replacing Skool's own chat sidebar
+- Whether to also patch `WebSocket` at `document_start` MAIN world (competitor does this for raise-hand detection) — useful later for presenter-claim coordination, not needed for Phase 1 itself
 
 ---
 

@@ -35,6 +35,19 @@ Files, chat, video shared during member-only meetings are private by intent — 
 
 This is the standard the rest of the design has to clear, not a nice-to-have.
 
+### Why this matters for Skool specifically
+
+Skool's own live meetings run on **[Stream.io](https://getstream.io/video/)** (a hosted commercial video infrastructure provider). Stream.io sees all video, audio, and signaling for every Skool meeting. The Skool meeting itself is *not* end-to-end encrypted — it has to pass through Stream's servers to work.
+
+So skool-dropzone's value proposition crystallizes:
+
+> Skool already trusts Stream.io with your video and audio.
+> skool-dropzone adds an E2EE side-channel for what you *share*
+> (files, chat, presentations, whiteboard) — content that neither
+> Skool, nor Stream.io, nor we can read.
+
+For member-only meetings, where the whole point is "admins aren't here" — that's the right boundary. The video itself is a known compromise (Stream sees it). The artifacts shared during the meeting don't have to be.
+
 ## Status
 
 Idea stage. No code yet. Repo opened to hold the scope as it firms up.
