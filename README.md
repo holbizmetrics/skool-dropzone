@@ -18,6 +18,18 @@ In one place:
 
 Scope = whoever has *this* meeting link, *right now*. Ephemeral by default.
 
+## Security (load-bearing, not optional)
+
+Files, chat, video shared during member-only meetings are private by intent — the whole point of this is that admins/owners aren't even on the call. So:
+
+- **Client-side encryption before transport.** Content encrypted in the extension before it leaves the browser. Whoever hosts the bytes (server or peer) cannot read them. SecuredChat (E2EE git-file-bus) is the precedent — same shape works here.
+- **Link as access + readability token.** The meeting link carries (or derives) the symmetric key. Without the link, ciphertext is useless. With the link, you're in.
+- **No cross-meeting bleed.** Each meeting's key is scoped to that meeting. Knowing one link doesn't grant access to any other.
+- **Ephemeral default.** Content evaporates when the meeting ends, unless explicitly saved (and even then, encrypted at rest).
+- **No third-party read.** The host (whoever runs the media relay) sees only ciphertext + traffic metadata. No content access. No "trust us."
+
+This is the standard the rest of the design has to clear, not a nice-to-have.
+
 ## Status
 
 Idea stage. No code yet. Repo opened to hold the scope as it firms up.
