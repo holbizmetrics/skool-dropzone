@@ -15,6 +15,11 @@ In one place:
 - **Chat with files** — type messages or drop pics, videos, files; same stream, everyone on the link sees it (the "drop zone" and the "chat" are one surface, not two)
 - **Whiteboard** — sketch together
 - **Video share** — share clips during the meeting
+- **Instant presentation** — anyone in the room can grab the presenter slot in one click. No "host promotes you," no screen-share dance. Three modes, stacked:
+  - **File-as-deck** — drop a PDF / image / video, it takes over the shared view; you control pages or playback for everyone
+  - **Type-as-slides** — type into chat, promote it to a slide everyone sees
+  - **Bring-your-own-deck** — load existing slides (PPT / Keynote / PDF) into the overlay and walk through them
+  - Whiteboard annotation works *over* whatever's being shown — sketch on top of slides, the PDF, the video frame
 
 Scope = whoever has *this* meeting link, *right now*. Ephemeral by default.
 
