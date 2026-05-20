@@ -3,7 +3,15 @@
   const MARKER_ID = "skool-dropzone-marker";
   const PANEL_ID = "skool-dropzone-panel";
 
+  // Stream.io Video React SDK is what Skool uses for live calls.
+  // .str-video__call-controls (the bottom controls bar) is the most
+  // reliable "we are in an active call" signal — verified in a live
+  // meeting on 2026-05-20 (URL: skool.com/live/<id>).
+  const CALL_ROOT_SELECTOR = ".str-video__call-controls";
+
   let isOpen = false;
+  let inCall = false;
+  let userToggled = false; // remember if user manually closed; respect that
   const messages = []; // ephemeral, session-only
 
   function ensureHost() {
@@ -24,7 +32,7 @@
     marker.type = "button";
     marker.textContent = "SDZ";
     marker.title = "skool-dropzone — click to open";
-    marker.addEventListener("click", togglePanel);
+    marker.addEventListener("click", onUserToggle);
     host.appendChild(marker);
   }
 
@@ -36,18 +44,18 @@
     panel.innerHTML = `
       <header class="sdz-header">
         <div class="sdz-title">
-          <span class="sdz-dot"></span>
+          <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.0.2</span>
+          <span class="sdz-version">v0.1.0</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
       <div class="sdz-banner">
-        <strong>Phase 0.5 shell.</strong> Local-only — nothing sent over the network yet.
+        <strong>Phase 1 shell.</strong> Local-only — nothing sent over the network yet.
       </div>
       <ul class="sdz-messages" role="log" aria-live="polite"></ul>
       <form class="sdz-composer">
-        <label class="sdz-attach" title="Attach a file (Phase 0.5: placeholder)">
+        <label class="sdz-attach" title="Attach a file (placeholder — file is not read or sent)">
           <input type="file" multiple hidden />
           <span>＋</span>
         </label>
@@ -57,13 +65,19 @@
     `;
     host.appendChild(panel);
 
-    panel.querySelector(".sdz-close").addEventListener("click", closePanel);
+    panel.querySelector(".sdz-close").addEventListener("click", onUserClose);
     panel.querySelector(".sdz-composer").addEventListener("submit", onSubmit);
     panel.querySelector(".sdz-attach input").addEventListener("change", onAttach);
   }
 
-  function togglePanel() {
+  function onUserToggle() {
+    userToggled = true;
     isOpen ? closePanel() : openPanel();
+  }
+
+  function onUserClose() {
+    userToggled = true;
+    closePanel();
   }
 
   function openPanel() {
@@ -83,6 +97,20 @@
     panel.classList.remove("sdz-open");
     document.getElementById(MARKER_ID)?.classList.remove("sdz-marker-active");
     isOpen = false;
+  }
+
+  function setCallState(active) {
+    if (active === inCall) return;
+    inCall = active;
+    const dot = document.querySelector(`#${PANEL_ID} .sdz-dot`);
+    if (dot) dot.dataset.state = active ? "in-call" : "idle";
+
+    if (active && !userToggled) {
+      openPanel();
+    }
+    if (!active && !userToggled) {
+      closePanel();
+    }
   }
 
   function onSubmit(ev) {
@@ -155,21 +183,31 @@
       .replace(/'/g, "&#39;");
   }
 
+  function checkCallPresence() {
+    setCallState(!!document.querySelector(CALL_ROOT_SELECTOR));
+  }
+
   // initial mount
   ensureHost();
+  checkCallPresence();
 
-  // re-assert on SPA navigation (Skool tears down + remounts the DOM aggressively)
+  // Watch the DOM for: Stream UI appearing/disappearing (call lifecycle),
+  // and Skool wiping our host element during SPA route changes.
   const observer = new MutationObserver(() => {
     if (!document.getElementById(HOST_ID)) {
       ensureHost();
-      // re-render messages we had in this tab's session
       messages.forEach(renderMessage);
       if (isOpen) openPanel();
     }
+    checkCallPresence();
   });
-  observer.observe(document.documentElement, { childList: true, subtree: false });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 
   window.addEventListener("popstate", () => {
     if (!document.getElementById(HOST_ID)) ensureHost();
+    checkCallPresence();
   });
 })();

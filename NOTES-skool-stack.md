@@ -22,23 +22,40 @@ Captured 2026-05-20 from analysis of the competing **Skool Extensions** extensio
 
 This is the basis for the security framing in [README.md](README.md#why-this-matters-for-skool-specifically): the meeting video is a known compromise; skool-dropzone's E2EE side-channel for shared *artifacts* (files, chat, presentations) is the real privacy win.
 
-## DOM selectors observed in competitor code
+## DOM selectors — verified in a live meeting 2026-05-20
 
-These are the Stream React SDK's default class names. Stream maintains them across SDK versions for theming purposes; they should be stable enough to rely on (with a fallback strategy in place for SDK upgrades).
+The live probe (`document.querySelectorAll('[class*="str-video"]')`) found **59 elements** with **36 distinct `str-video*` classes**. The Stream React SDK uses a stable CSS class prefix that should survive SDK upgrades (Stream maintains these classes for theming).
 
-| Selector | Purpose |
+### Selectors confirmed present in a live meeting
+
+| Selector | Purpose | Notes |
+|---|---|---|
+| `.str-video` | SDK root container | Bare class on the SDK's outermost element |
+| **`.str-video__call-controls`** | Bottom controls bar | **★ Phase 1 detection target** — always present in an active call |
+| `.str-video__participant-view` | Per-participant tile (one per participant) | Includes modifiers: `--dominant-speaker`, `--no-audio`, `--no-video`, `--speaking` |
+| `.str-video__video` | Each `<video>` element |  |
+| `.str-video__call-controls__button` | Individual control buttons (mic, camera, leave, etc.) | With `--enabled`, `--variant-danger` modifiers |
+| `.str-video__icon--*` | Iconography classes | `mic-off`, `camera-off`, `screen-share-off`, `chat`, `participants`, `reactions`, `recording-off`, `call-end`, etc. |
+| `.str-video__composite-button` | Compound button (button + dropdown menu) | Used for camera/mic/screen-share with their device-picker menus |
+| `.str-video__menu-toggle-button` | Dropdown menu trigger |  |
+| `.str-video__no-media-permission` | Warning shown when mic/camera permission denied | Present when user joins audio-off |
+| `.str-video__notification-wrapper` | In-call notification toasts |  |
+| `.str-video__video-placeholder` + `__avatar` | Fallback shown when participant has no video |  |
+
+### Selectors NOT present (despite being mentioned in Stream docs / competitor code)
+
+These were tested in the live meeting and were **absent** — Skool's specific Stream SDK configuration doesn't use them, or they only render conditionally:
+
+| Selector | Why absent (best guess) |
 |---|---|
-| `.str-video__participant-listing-item` | Container for each participant tile |
-| `.str-video__participant-listing-item__display-name` | Participant display name text |
-| `.str-video__participant-listing-item__media-indicator-group` | Mic / camera state indicators |
+| `.str-video__call` | Stream SDK uses `.str-video` (bare) as the root instead of `.str-video__call` |
+| `.str-video__call-container` | Not used in this build |
+| `.str-video__participant-listing` | Only renders when the participant sidebar panel is open (user-toggled) |
+| `.str-video__participant-listing-item` | Same — only when the participant sidebar is open |
+| `.str-video__paginated-grid-layout` | This build uses a different layout (probably speaker-focus by default) |
+| `.str-video__speaker-layout` | Not present in initial state — may render after a participant becomes a speaker |
 
-**Likely existing selectors (not observed but standard in Stream SDK)** — to verify in a live meeting:
-
-| Selector | Purpose |
-|---|---|
-| `.str-video__call` | The top-level call container (best Phase 1 detection target) |
-| `.str-video__participant-view` | Each participant's video tile |
-| `.str-video__call-controls` | The bottom controls bar |
+**Implication:** the competitor extension's `.str-video__participant-listing-item` detector would miss meetings until the user opens the participant sidebar. Our `.str-video__call-controls` detector fires immediately on entering a call.
 
 ## Hook points used by the competitor
 
@@ -52,13 +69,22 @@ These tell us what's possible to intercept in a Skool meeting:
 
 **For us:** Phase 1 doesn't need any of these patches (DOM detection is enough). Phase 5+ presenter-claim coordination may want WebSocket-level hooks if we want to ride Stream's signaling channel for presenter-slot announcements, but our own E2EE WebRTC data channel (Phase 2) is probably the cleaner path — it keeps presenter-state on the E2EE side-channel, not visible to Stream / Skool.
 
-## Skool URL patterns (TBD — verify from a live meeting)
+## Skool URL patterns
 
-The competitor doesn't gate by URL, but we should still know what they look like for human-readable purposes (e.g. "Phase 1 panel injects on URLs matching X"). To verify on the next live meeting:
+**Verified in a live meeting 2026-05-20** — meeting URL pattern is:
 
-- Community page: `https://www.skool.com/<community-slug>/` (likely)
-- Calendar / event: `https://www.skool.com/<community-slug>/calendar/...` (likely)
-- Meeting / live call: TBD — could be a modal over a calendar event, could be a sub-route
+```
+https://www.skool.com/live/<meeting-id>
+```
+
+Where `<meeting-id>` is an opaque short ID (e.g. `TgzjxszWRTp` — 11 alphanumeric chars).
+
+**This means we CAN URL-gate at the manifest level** — unlike the competitor extension, which matches all of `*.skool.com/*` and detects meeting state at runtime. Phase 1 of skool-dropzone uses the narrower `https://www.skool.com/live/*` match pattern, which means the content script doesn't even *load* on non-meeting pages. Cleaner, less invasive, smaller permission surface.
+
+Other Skool URL patterns observed (informational, not used by this extension):
+
+- Community page: `https://www.skool.com/<community-slug>/`
+- Classroom / calendar / event subroutes: `https://www.skool.com/<community-slug>/<feature>/...`
 
 ## Anti-patterns / things to avoid
 

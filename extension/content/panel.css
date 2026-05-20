@@ -74,8 +74,13 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10b981;
+  background: #9ca3af;
   display: inline-block;
+  transition: background 200ms ease;
+}
+#skool-dropzone-panel .sdz-dot[data-state="in-call"] {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
 }
 #skool-dropzone-panel .sdz-version {
   font-size: 11px;

@@ -38,32 +38,30 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 1 — Meeting-page detection ★
+## Phase 1 — Meeting auto-detect ★ ✅ shipped (commit pending push)
 
-**Goal:** Extension knows when you're in a meeting and injects a panel only then.
+**Goal:** Extension knows when you're in a meeting and the panel auto-opens.
 
-**Strategy update (from competitor reverse-engineering, 2026-05-20):**
+**Findings from a live meeting (2026-05-20):**
 
-The competing "Skool Extensions" extension (`jinaapgibcgkfaffmpkhdikncmfhpfne`) uses **no URL-level gating** — its manifest matches all of `*.skool.com/*` and detects meeting state at runtime via the DOM and WebSocket traffic. We follow the same approach because:
+- **Meeting URL pattern:** `https://www.skool.com/live/<id>` — directly usable for manifest gating. (Cleaner than the competitor extension's all-of-skool.com match + runtime detection.)
+- **Skool meetings use Stream.io Video React SDK.** Live probe found 59 elements with `str-video*` CSS classes; 36 distinct class names. See [`NOTES-skool-stack.md`](NOTES-skool-stack.md#dom-selectors--verified-in-a-live-meeting-2026-05-20).
+- **Best detection target:** `.str-video__call-controls` (the bottom controls bar — always present in an active call, fires immediately on join).
 
-- Skool is a Next.js SPA. The React root is `#__next`.
-- Skool meetings render via [Stream.io's Video React SDK](https://getstream.io/video/). The Stream SDK uses a stable CSS class prefix: `str-video__*` (e.g. `.str-video__participant-listing-item`, `.str-video__participant-listing-item__display-name`).
-- This means detection is a single DOM check: *is a `.str-video__*` element present?* When yes, we're in a meeting.
-- Skool meeting signaling flows as JSON over WebSocket to `stream-io-api.com` (event types like `call.reaction_new` carry per-event payload).
+**Shipped:**
 
-**Implementation:**
+- Manifest matches narrowed to `https://www.skool.com/live/*` (was `*.skool.com/*`) — content script no longer loads on non-meeting Skool pages
+- `MutationObserver` on `document.documentElement` (subtree) watches `.str-video__call-controls` lifecycle
+- Auto-open on call detected; auto-close on call ended
+- User intent respected: clicking SDZ / × marks the panel as user-toggled and Phase 1 won't re-auto-open during the same call
+- Status dot in the panel header: grey (idle) / green with pulse ring (in-call)
+- Version bumped 0.0.2 → 0.1.0
 
-- Keep manifest match at `https://*.skool.com/*` (already done in Phase 0).
-- Add a runtime meeting-detector that uses a `MutationObserver` to watch for Stream's call container appearing/disappearing in the DOM.
-- When detected: remove the SDZ marker, mount an empty side panel docked to the meeting view (right edge, full height).
-- When detector says "no longer in meeting" (Stream DOM gone): unmount panel.
-
-**Done when:** open a Skool meeting → panel appears within ~1s; leave the meeting (Stream UI tears down) → panel disappears.
+**Done when:** open a Skool meeting → SDZ chip appears, panel auto-opens within ~1s of Stream's controls bar rendering, status dot turns green. Leave the meeting → panel auto-closes, dot goes grey. ✅
 
 **Open decisions:**
-- Which exact Stream selector is the most reliable detection target (the call container vs participant listing — to be verified in a live meeting)
-- Where does the panel dock — right edge (default plan) / floating / replacing Skool's own chat sidebar
-- Whether to also patch `WebSocket` at `document_start` MAIN world (competitor does this for raise-hand detection) — useful later for presenter-claim coordination, not needed for Phase 1 itself
+- Should the panel dock differently when in a meeting vs not? (Currently: right edge for both — fine.)
+- Whether to also patch `WebSocket` at `document_start` MAIN world for Stream's signaling channel — useful later for presenter-claim coordination, **not needed for the spine** (Phase 2's own E2EE WebRTC data channel is the cleaner path).
 
 ---
 
