@@ -65,21 +65,27 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 2 — E2EE transport ★
+## Phase 2 — E2EE text transport ★ ✅ built (commit pending push) — awaiting two-browser test
 
-**Goal:** Two browsers on the same meeting link can exchange ciphertext. Nothing else yet.
+**Goal:** Two browsers on the same meeting link exchange E2EE text messages. The relay never sees plaintext.
 
-- Generate / derive a per-meeting key from the URL (likely from a fragment `#k=...` added when sharing)
-- Pick transport: **default plan = WebRTC mesh** (no server bill, P2P, fits ≤10-participant rooms); signaling via a thin hosted relay (just brokering connection offers, sees no content)
-- Encrypt all payloads client-side before sending (AES-GCM or libsodium secretbox)
-- Test: two browser windows, same `#k=...` URL fragment → text payload roundtrip, server sees only ciphertext
+**Decisions made:**
+- Transport: **WebRTC mesh** (P2P, no media server, fits ≤10 peers). Signaling = **localhost Node relay** for dev (operator-approved 2026-05-20); same code deploys to a free hosted tier for production.
+- Key derivation: **passphrase-based** (PBKDF2). Room = meeting id (relay routes by it); key = derived from a passphrase the relay never sees → relay-operator-proof. Empty passphrase = convenience mode (weaker, flagged in UI).
+- CSP: signaling WebSocket lives in the **background service worker**, not the content script, to dodge Skool's page CSP.
 
-**Done when:** alice and bob send each other `"hello"` end-to-end, signaling relay logs show ciphertext only.
+**Built:**
+- `signaling/server.js` + `package.json` + `README.md` — the dev relay (`ws://localhost:8080`, rooms by meeting id, relays SDP/ICE only)
+- `extension/background/service-worker.js` — bridges content script ↔ relay over a runtime port
+- `extension/content/transport.js` — WebRTC peer mesh; joiner-initiates glare avoidance; encrypt-on-send / decrypt-on-receive via `crypto.js`
+- `extension/content/panel.js` — connect bar (passphrase + Join), status line (offline / connecting / waiting / 🔒 N peers / error), own-vs-peer message bubbles, undecryptable-message notice
+- Manifest: background SW + `host_permissions` for localhost + transport.js in content scripts; v0.2.0 → 0.3.0
 
-**Open decisions:**
-- Self-hosted relay (cheap VPS, ~€5/mo) or use a free public WebRTC signaling service?
-- WebRTC mesh ceiling — fine up to ~10 peers; beyond that need an SFU (defer to later phase)
-- Key derivation: URL fragment (never sent to server) is the obvious choice; double-check Skool URL rewriting doesn't strip fragments
+**Done when:** two browser windows on the same `/live/<id>` URL with the same passphrase exchange a text message E2EE; a third window with a different passphrase connects but cannot read the messages. ⏳ *needs operator to run the relay + test two windows.*
+
+**Verified so far:** all 5 JS files pass `node --check`; `SDZCrypto.selfTest()` returns `true` (crypto round-trips, wrong passphrase fails). The WebRTC + signaling flow is written to standard patterns but **not yet run end-to-end** — that's the operator test.
+
+**Deferred to later phases:** file *bytes* transfer (Phase 4 — chunked; Phase 2 sends only the share *notice*). STUN/TURN for cross-internet peers (Phase 2 uses host candidates, fine for localhost; production adds STUN).
 
 ---
 

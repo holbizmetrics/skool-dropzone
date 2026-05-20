@@ -1,19 +1,23 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.2.0",
-  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Phase 2 in progress (Fork B staging + crypto core; transport pending).",
+  "version": "0.3.0",
+  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Phase 2 (E2EE text transport over WebRTC).",
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "host_permissions": ["http://localhost/*", "https://localhost/*"],
   "content_scripts": [
     {
       "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],
-      "js": ["content/crypto.js", "content/panel.js"],
+      "js": ["content/crypto.js", "content/transport.js", "content/panel.js"],
       "css": ["content/panel.css"],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "action": {
-    "default_title": "skool-dropzone (Phase 2 wip)",
+    "default_title": "skool-dropzone (Phase 2)",
     "default_popup": "popup/popup.html"
   }
 }

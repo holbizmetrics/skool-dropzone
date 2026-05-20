@@ -1,6 +1,6 @@
 # skool-dropzone — extension
 
-The Chrome MV3 extension. Currently **Phase 1** (meeting auto-detect, local-only): the extension only loads on Skool live-meeting pages, detects when you're in an active Stream.io call, and auto-opens the side panel.
+The Chrome MV3 extension. Currently **Phase 2** (E2EE text transport): on a Skool live meeting, the panel auto-opens, you join an end-to-end-encrypted room, and members on the same meeting link exchange text messages — the relay never sees plaintext.
 
 ## Install (developer mode)
 
@@ -8,7 +8,16 @@ The Chrome MV3 extension. Currently **Phase 1** (meeting auto-detect, local-only
 2. Toggle **Developer mode** on (top right).
 3. Click **Load unpacked**.
 4. Select the `extension/` folder (this folder).
-5. Visit a Skool live meeting (URL like `https://www.skool.com/live/<id>`) — the `SDZ` chip appears in the bottom-right corner; the panel auto-opens within ~1s of Stream's controls rendering. Status dot in the header is **green** while you're in the call, **grey** otherwise.
+5. Visit a Skool live meeting (URL like `https://www.skool.com/live/<id>`) — the `SDZ` chip appears bottom-right; the panel auto-opens within ~1s of Stream's controls rendering. Status dot in the header is **green** while you're in the call.
+
+## Try the E2EE transport (needs the dev relay running)
+
+1. Start the signaling relay — see [`../signaling/README.md`](../signaling/README.md): `cd signaling && npm install && npm start`
+2. Open the same meeting URL in **two** windows (or one normal + one incognito with the extension allowed).
+3. In each panel: type the **same room passphrase** → **Join room**.
+4. Status line goes green: `🔒 end-to-end encrypted · 1 peer connected`.
+5. Type a message in one → it appears in the other (your messages right/blue, theirs left/grey).
+6. Use a **different** passphrase in a third window → it connects but messages show as "couldn't be decrypted" — that's the E2EE boundary working.
 
 ## What you can do
 
