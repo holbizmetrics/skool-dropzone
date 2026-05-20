@@ -12,8 +12,7 @@ A Chrome extension, Skool-optimized, that injects a member-side meeting companio
 
 In one place:
 
-- **Drop zone** — drop pics, videos, files; everyone on the link sees them
-- **Chat** — type to the room
+- **Chat with files** — type messages or drop pics, videos, files; same stream, everyone on the link sees it (the "drop zone" and the "chat" are one surface, not two)
 - **Whiteboard** — sketch together
 - **Video share** — share clips during the meeting
 
