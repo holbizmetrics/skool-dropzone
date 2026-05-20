@@ -16,9 +16,23 @@ The Chrome MV3 extension. Currently **Phase 1** (meeting auto-detect, local-only
 - **Click SDZ** → toggle panel manually (overrides auto behavior for the rest of this call)
 - **Click ×** → close the panel; it stays closed for this call
 - **Type a message** + Enter → message shows in the list (local only — disappears on tab close)
-- **Attach a file** (＋ button) → file name + size shows as a message tile (also local only — file is never read or sent)
+- **Add a file** — click ＋ or **drag-and-drop onto the panel** → file goes to the **staging tray**
+- **Per staged file** (Fork B):
+  - **Share** → moves it into the message log (Phase 2 will encrypt + actually transmit)
+  - **Present** → opens a local fullscreen preview (images / video / PDF); Phase 5 will sync this to everyone
+  - **✕** → remove from staging
 
-The amber banner inside the panel reminds: nothing leaves your browser yet.
+The banner inside the panel reminds: nothing leaves your browser yet (transport lands in Phase 2).
+
+## Crypto core (Phase 2 foundation, shipped)
+
+`content/crypto.js` is the E2EE core — PBKDF2 key derivation + AES-GCM. To verify it works, open DevTools console on a `/live/*` page:
+
+```javascript
+await SDZCrypto.selfTest()   // → true
+```
+
+`true` means encrypt/decrypt round-trips correctly and a wrong passphrase fails to decrypt. See [`../PHASE2-transport.md`](../PHASE2-transport.md) for the full transport architecture.
 
 ## What Phase 1 proves
 
