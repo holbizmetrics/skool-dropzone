@@ -1,0 +1,53 @@
+/* skool-dropzone — whiteboard overlay (Phase 6)
+ * Shared by the meeting panel (content script) and the test harness. */
+
+.sdz-wb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+}
+.sdz-wb-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+.sdz-wb-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #111827;
+  padding: 6px 8px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.sdz-wb-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #374151;
+  cursor: pointer;
+  padding: 0;
+}
+.sdz-wb-swatch.sdz-wb-active {
+  border-color: #fff;
+  transform: scale(1.12);
+}
+.sdz-wb-btn {
+  border: 1px solid #374151;
+  background: transparent;
+  color: #e5e7eb;
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.sdz-wb-btn:hover { background: #1f2937; }
+.sdz-wb-btn.sdz-wb-active { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+.sdz-wb-close { color: #fca5a5; }

@@ -156,6 +156,24 @@
 #skool-dropzone-panel .sdz-status[data-mode="connected"] { background: #ecfdf5; color: #065f46; }
 #skool-dropzone-panel .sdz-status[data-mode="error"] { background: #fef2f2; color: #991b1b; }
 
+#skool-dropzone-panel .sdz-tools {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+#skool-dropzone-panel .sdz-wb-toggle {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-wb-toggle:hover { background: #f3f4f6; }
+
 #skool-dropzone-panel .sdz-messages {
   flex: 1 1 auto;
   margin: 0;

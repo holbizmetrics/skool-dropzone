@@ -54,8 +54,9 @@
 
   function onMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
-    // Phase 5: presentation messages handled by the shared module.
+    // Phase 5/6: presentation + whiteboard handled by their shared modules.
     if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
+    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj)) return;
     switch (obj.kind) {
       case "undecryptable":
         addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");
@@ -168,5 +169,13 @@
     }
     addLine("me", `presenting "${f.name}" to the room…`);
     window.SDZPresent.presentFile(f, window.SDZTransport);
+  });
+
+  $("whiteboard").addEventListener("click", () => {
+    if (!connected) {
+      addLine("sys", "join a room first, then open the whiteboard");
+      return;
+    }
+    window.SDZWhiteboard.toggle(window.SDZTransport);
   });
 })();

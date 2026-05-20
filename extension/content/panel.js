@@ -66,6 +66,10 @@
       </div>
       <div class="sdz-status" data-mode="offline">Not connected — join the room to chat with other members.</div>
 
+      <div class="sdz-tools">
+        <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
+      </div>
+
       <ul class="sdz-messages" role="log" aria-live="polite"></ul>
 
       <div class="sdz-stage" hidden>
@@ -91,6 +95,9 @@
     panel.querySelector(".sdz-join").addEventListener("click", onJoin);
     panel.querySelector(".sdz-pass").addEventListener("keydown", (e) => {
       if (e.key === "Enter") onJoin();
+    });
+    panel.querySelector(".sdz-wb-toggle").addEventListener("click", () => {
+      if (window.SDZWhiteboard) window.SDZWhiteboard.toggle(window.SDZTransport);
     });
 
     wireDragDrop(panel);
@@ -158,8 +165,9 @@
 
   function onRemoteMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
-    // Presentation messages (present-*) are handled by the shared module.
+    // Presentation (present-*) and whiteboard (wb-*) are handled by their modules.
     if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
+    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj)) return;
     switch (obj.kind) {
       case "undecryptable":
         addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });

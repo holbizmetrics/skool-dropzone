@@ -143,17 +143,22 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 6 — Whiteboard
+## Phase 6 — Whiteboard ★ ✅ built (commit pending push)
 
-**Goal:** Sketch on a shared canvas. Annotate *over* whatever's being presented.
+**Goal:** Sketch on a shared canvas. Annotate *over* whatever's underneath.
 
-- Canvas overlay (transparent layer above the current view)
-- Pen / eraser / colors (minimum viable toolset)
-- Stroke sync over the encrypted channel
-- Works on top of: nothing (blank), a presented PDF, an image, a video frame
-- Clear button (presenter-only or anyone?)
+**Built — shared module `content/whiteboard.js` (+ `whiteboard.css`):**
+- Transparent fullscreen canvas overlay; toggle from the panel ("🖊 Whiteboard") or the harness.
+- Toolbar: 6-color palette, eraser, clear, close.
+- Strokes broadcast per segment over the E2EE channel as `wb-stroke`; `wb-clear` clears for everyone.
+- **Coordinates normalized 0..1** so drawings align across different window sizes; strokes stored + replayed on resize.
+- Auto-opens on a peer's first stroke (so you see someone else drawing).
+- Sits above content → annotates over a presentation, image, or blank.
+- Harness gained a Whiteboard button → testable with two tabs, no meeting.
 
-**Done when:** alice draws an arrow on a presented PDF page, bob sees the same arrow in the same place in real-time.
+**Done when:** alice draws, bob sees the same strokes in the same relative place in real-time; clear syncs. ⏳ *two-tab browser test pending.*
+
+**Known limits (v1):** segment-per-pointermove is chatty (fine for small rooms); no per-user cursor; eraser is a fixed multiple of pen width; whiteboard vs presentation overlay stacking is DOM-order (last opened wins).
 
 ---
 

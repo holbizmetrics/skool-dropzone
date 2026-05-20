@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.5.0",
-  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Phase 5 (E2EE presentation sync).",
+  "version": "0.6.0",
+  "description": "Member-side companion for Skool meetings — chat-with-files + whiteboard + instant presentation, all E2EE. Phase 6 (shared whiteboard).",
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -10,14 +10,14 @@
   "content_scripts": [
     {
       "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],
-      "js": ["content/crypto.js", "content/transport.js", "content/present.js", "content/panel.js"],
-      "css": ["content/panel.css", "content/present.css"],
+      "js": ["content/crypto.js", "content/transport.js", "content/present.js", "content/whiteboard.js", "content/panel.js"],
+      "css": ["content/panel.css", "content/present.css", "content/whiteboard.css"],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "action": {
-    "default_title": "skool-dropzone (Phase 5)",
+    "default_title": "skool-dropzone (Phase 6)",
     "default_popup": "popup/popup.html"
   }
 }
