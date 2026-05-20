@@ -4,7 +4,7 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 0 — Scaffolding ★
+## Phase 0 — Scaffolding ★ ✅ shipped (commit `18b1eda`, verified in browser 2026-05-20)
 
 **Goal:** Chrome extension loads on Skool and proves the injection path.
 
@@ -13,10 +13,28 @@ Phased so each step is testable on its own and builds toward the killer feature 
 - Content script that adds a visible marker (e.g. tiny `<div id="skool-dropzone-marker">SDZ</div>` in the corner) on every Skool page
 - Load unpacked in Chrome, navigate around Skool, confirm marker survives SPA navigation
 
-**Done when:** marker visible across all Skool pages, no console errors.
+**Done when:** marker visible across all Skool pages, no console errors. ✅
 
 **Open decisions:**
-- License (MIT / GPL / proprietary?)
+- License — MIT (decided 2026-05-20, see `LICENSE`)
+
+---
+
+## Phase 0.5 — Clickable panel shell ★ ✅ shipped (commit pending push)
+
+**Goal:** Make the extension *do something* visibly. SDZ chip becomes a button that opens a docked side panel with the chat-with-files UI surface. Local-only — no transport yet.
+
+- Replace static marker `<div>` with an interactive button
+- Build a docked side panel (right-edge, full-height, 360px wide) that slides in/out
+- Panel UI: header (title + close button) + amber "local-only" banner + scrolling message list + composer (file-attach + text input + send)
+- Local-only message state — typed messages and attached file metadata appear in the list, never leave the browser
+- Survive Skool SPA navigation: MutationObserver re-mounts the host element if Skool wipes the DOM during route changes; messages from the current tab session persist visually
+
+**Done when:** click SDZ → panel slides in → type a message → it appears → click × → panel closes; navigate to another Skool page → marker still there, panel still openable. ✅
+
+**What this unblocks:**
+- Phase 1's auto-open behavior just calls `openPanel()` — UI is already built
+- Phase 2's E2EE transport plugs into the existing `addMessage()` rendering pipeline
 
 ---
 
