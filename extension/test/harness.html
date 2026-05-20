@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>skool-dropzone — transport test</title>
+    <link rel="stylesheet" href="harness.css" />
+  </head>
+  <body>
+    <h1>skool-dropzone — transport test harness</h1>
+    <p class="sub">
+      Dev tool. Tests the full E2EE transport (crypto + service worker + signaling + WebRTC)
+      without a live Skool meeting. Open this page in <strong>two</strong> tabs/windows, use the
+      <strong>same room + passphrase</strong> in both, and chat.
+    </p>
+
+    <div class="row">
+      <label>Room <input id="room" type="text" value="test-room" /></label>
+      <label>Passphrase <input id="pass" type="text" value="otter" placeholder="(blank = convenience mode)" /></label>
+      <button id="join">Join room</button>
+    </div>
+
+    <div id="status" class="status" data-mode="offline">Not connected.</div>
+
+    <div id="crypto-line" class="crypto-line">crypto self-test: <span id="crypto-result">…</span></div>
+
+    <ul id="log" class="log"></ul>
+
+    <form id="composer" class="composer">
+      <input id="msg" type="text" placeholder="Type a message…" autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+
+    <script src="../content/crypto.js"></script>
+    <script src="../content/transport.js"></script>
+    <script src="harness.js"></script>
+  </body>
+</html>

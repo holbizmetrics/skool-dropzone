@@ -30,9 +30,11 @@
     return m ? m[1] : "unknown";
   }
 
-  async function init({ passphrase, onMessage, onStatus }) {
+  async function init({ passphrase, onMessage, onStatus, room: roomOverride }) {
     if (joined) return;
-    room = meetingId();
+    // roomOverride lets the dev test harness use a fixed room without a
+    // /live/<id> URL. In production (content script) it derives from the URL.
+    room = roomOverride || meetingId();
     onMessageCb = onMessage;
     onStatusCb = onStatus;
     key = await window.SDZCrypto.deriveKey(passphrase || "", room);

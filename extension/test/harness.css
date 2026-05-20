@@ -1,0 +1,72 @@
+body {
+  margin: 0;
+  padding: 24px;
+  max-width: 720px;
+  margin: 0 auto;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #111827;
+  background: #f9fafb;
+}
+h1 { font-size: 18px; margin: 0 0 4px; }
+.sub { color: #6b7280; font-size: 13px; margin: 0 0 16px; }
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #374151; }
+input {
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 10px;
+  font: inherit;
+  background: #fff;
+}
+input:disabled { background: #f3f4f6; color: #6b7280; }
+button {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #2563eb;
+  color: #fff;
+  font: 600 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+button:hover { background: #1d4ed8; }
+button:disabled { background: #10b981; cursor: default; }
+.status {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.status[data-mode="offline"] { background: #f3f4f6; color: #6b7280; }
+.status[data-mode="connecting"], .status[data-mode="waiting"] { background: #fef3c7; color: #92400e; }
+.status[data-mode="connected"] { background: #ecfdf5; color: #065f46; }
+.status[data-mode="error"] { background: #fef2f2; color: #991b1b; }
+.crypto-line { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+.crypto-line .ok { color: #065f46; font-weight: 600; }
+.crypto-line .bad { color: #991b1b; font-weight: 600; }
+.log {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 12px;
+  height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.line { font-size: 13px; padding: 4px 8px; border-radius: 6px; }
+.line.me { background: #dbeafe; align-self: flex-end; }
+.line.them { background: #f3f4f6; align-self: flex-start; }
+.line.sys { color: #6b7280; font-style: italic; font-size: 12px; align-self: center; }
+.composer { display: flex; gap: 8px; }
+.composer input { flex: 1 1 auto; }
