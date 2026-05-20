@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.4.0",
-  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Phase 4 (E2EE file transfer over WebRTC).",
+  "version": "0.4.1",
+  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Phase 3+4 (multi-user E2EE text + file transfer).",
   "background": {
     "service_worker": "background/service-worker.js"
   },

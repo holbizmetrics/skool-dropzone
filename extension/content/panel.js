@@ -16,6 +16,7 @@
   let userToggled = false;
   let connected = false; // joined the E2EE room
   let convenienceMode = false; // joined with empty passphrase
+  let lastPeers = 0; // for presence (join/leave) detection
   const messages = [];
   const staged = new Map();
   let stageSeq = 0;
@@ -132,6 +133,13 @@
     if (s.state === "signaling-error" || s.state === "signaling-disconnected" || s.state === "signaling-closed") {
       setStatus("error", "Signaling relay not reachable — is the local relay running? (npm start in /signaling)");
       return;
+    }
+    // Presence (Phase 3): announce members joining/leaving the mesh.
+    if (n !== lastPeers) {
+      if (n > lastPeers) addMessage({ kind: "system", body: `A member connected (${n} now in the room).` });
+      else if (n > 0) addMessage({ kind: "system", body: `A member left (${n} remaining).` });
+      else addMessage({ kind: "system", body: "You're alone in the room now." });
+      lastPeers = n;
     }
     const lock = convenienceMode ? "⚠ convenience mode" : "🔒 end-to-end encrypted";
     if (n > 0) {

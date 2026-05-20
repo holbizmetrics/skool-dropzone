@@ -89,16 +89,18 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 3 — Text chat (multi-user) ★
+## Phase 3 — Multi-user ★ ✅ built (commit pending push) — 3-peer discovery verified in Node
 
-**Goal:** Multiple people in the room exchange text messages, E2EE.
+**Goal:** Multiple people in the room exchange messages/files, E2EE, with presence.
 
-- Multi-peer connection management (join, leave, reconnect)
-- Message list UI in the panel
-- Late-joiner gets recent history (in-memory only, ephemeral)
-- Participant list (just count + initials)
+**Built / verified:**
+- Mesh broadcast was already in place (`send()` loops all peers; `sendFile()` too) — multi-user messaging + file transfer work for N peers by construction.
+- Joiner-initiates glare avoidance scales: a 3rd peer offers to both existing peers; existing peers learn the newcomer via `peer-joined`. **Verified in Node** (3 peers: C learns A&B via peers-list; A&B learn C via peer-joined → full mesh).
+- Presence: panel + harness now post a system line when a member joins/leaves (count delta).
 
-**Done when:** 3+ browsers on the same link, everyone sees everyone's messages in real-time, joining late shows last N messages.
+**Done when:** 3+ browsers on the same room all see each other's messages in real-time, with join/leave notices. ⏳ *3-window browser test pending (signaling verified in Node).*
+
+**Deferred:** late-joiner history (you see messages from when you joined — acceptable for a live meeting; revisit if wanted); participant roster with names (currently a count); reconnect-after-drop.
 
 ---
 

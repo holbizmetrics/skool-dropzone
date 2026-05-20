@@ -5,6 +5,7 @@
   const $ = (id) => document.getElementById(id);
   let connected = false;
   let convenience = false;
+  let lastPeers = 0;
 
   // Run the crypto self-test on load so we know the core works here.
   (async () => {
@@ -38,6 +39,11 @@
     if (["signaling-error", "signaling-disconnected", "signaling-closed"].includes(s.state)) {
       setStatus("error", "Signaling relay not reachable — is it running? (cd signaling && npm start)");
       return;
+    }
+    if (n !== lastPeers) {
+      if (n > lastPeers) addLine("sys", `a peer connected (${n} now connected)`);
+      else addLine("sys", `a peer left (${n} connected)`);
+      lastPeers = n;
     }
     const lock = convenience ? "⚠ convenience mode" : "🔒 E2EE";
     if (n > 0) setStatus("connected", `${lock} · ${n} peer${n === 1 ? "" : "s"} connected`);
