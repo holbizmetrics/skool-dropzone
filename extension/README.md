@@ -27,7 +27,7 @@ The Chrome MV3 extension. Currently **Phase 2** (E2EE text transport): on a Skoo
 - **Type a message** + Enter → message shows in the list (local only — disappears on tab close)
 - **Add a file** — click ＋ or **drag-and-drop onto the panel** → file goes to the **staging tray**
 - **Per staged file** (Fork B):
-  - **Share** → moves it into the message log (Phase 2 will encrypt + actually transmit)
+  - **Share** → if joined to a room, encrypts + transmits the file bytes to peers (chunked, with progress); else local-only. Images preview inline; everything gets a Download button. (Phase 4)
   - **Present** → opens a local fullscreen preview (images / video / PDF); Phase 5 will sync this to everyone
   - **✕** → remove from staging
 

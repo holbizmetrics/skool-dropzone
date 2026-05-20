@@ -9,6 +9,8 @@
   // meeting on 2026-05-20 (URL: skool.com/live/<id>).
   const CALL_ROOT_SELECTOR = ".str-video__call-controls";
 
+  const MAX_FILE = 50 * 1024 * 1024; // 50 MB cap for Phase 4
+
   let isOpen = false;
   let inCall = false;
   let userToggled = false;
@@ -17,6 +19,8 @@
   const messages = [];
   const staged = new Map();
   let stageSeq = 0;
+  const incoming = new Map(); // transfer id -> { name, size, type, total, parts[], received, domId }
+  let xferSeq = 0;
 
   function ensureHost() {
     let host = document.getElementById(HOST_ID);
@@ -146,20 +150,74 @@
 
   function onRemoteMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
-    if (obj.kind === "undecryptable") {
-      addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });
-      return;
+    switch (obj.kind) {
+      case "undecryptable":
+        addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });
+        break;
+      case "text":
+        addMessage({ kind: "text", body: obj.body, mine: false, peer: fromPeer });
+        break;
+      case "file-start":
+        startIncoming(obj);
+        break;
+      case "file-chunk":
+        chunkIncoming(obj);
+        break;
+      case "file-end":
+        endIncoming(obj);
+        break;
     }
-    if (obj.kind === "text") {
-      addMessage({ kind: "text", body: obj.body, mine: false, peer: fromPeer });
-    } else if (obj.kind === "file-share") {
-      addMessage({
-        kind: "file",
-        body: obj.name,
-        meta: `${formatBytes(obj.size)} · ${obj.type || "file"} · shared by a member`,
-        mine: false,
-      });
+  }
+
+  // === Phase 4: incoming file reassembly ===
+
+  function startIncoming(obj) {
+    if (obj.size > MAX_FILE) return; // sender should have blocked it; ignore
+    const domId = "sdz-in-" + obj.id;
+    incoming.set(obj.id, {
+      name: obj.name,
+      size: obj.size,
+      type: obj.type,
+      total: obj.total,
+      parts: new Array(obj.total),
+      received: 0,
+      domId,
+    });
+    addMessage({
+      kind: "file-progress",
+      domId,
+      body: obj.name,
+      meta: `${formatBytes(obj.size)} · receiving 0%`,
+      mine: false,
+    });
+  }
+
+  function chunkIncoming(obj) {
+    const t = incoming.get(obj.id);
+    if (!t) return;
+    if (t.parts[obj.seq] === undefined) {
+      t.parts[obj.seq] = obj.data;
+      t.received++;
     }
+    const pct = Math.round((100 * t.received) / t.total);
+    updateProgress(t.domId, `${formatBytes(t.size)} · receiving ${pct}%`);
+  }
+
+  function endIncoming(obj) {
+    const t = incoming.get(obj.id);
+    if (!t) return;
+    const parts = t.parts.map((b64) => window.SDZCrypto.fromB64(b64 || ""));
+    let len = 0;
+    parts.forEach((p) => (len += p.length));
+    const all = new Uint8Array(len);
+    let off = 0;
+    parts.forEach((p) => {
+      all.set(p, off);
+      off += p.length;
+    });
+    const blob = new Blob([all], { type: t.type || "application/octet-stream" });
+    finalizeFileMessage(t.domId, { name: t.name, size: t.size, type: t.type }, URL.createObjectURL(blob), false);
+    incoming.delete(obj.id);
   }
 
   function wireDragDrop(panel) {
@@ -307,19 +365,92 @@
   function shareStaged(id) {
     const item = staged.get(id);
     if (!item) return;
-    // Phase 4 will chunk + transmit the file bytes. Phase 2 transmits the
-    // share *notice* (name/size/type) so peers see what was shared; the
-    // bytes themselves stay local until Phase 4.
-    addMessage({
-      kind: "file",
-      body: item.name,
-      meta: `${formatBytes(item.size)} · ${item.type || "application/octet-stream"} · ${connected ? "shared (notice sent; bytes in Phase 4)" : "shared (local-only)"}`,
-      mine: true,
-    });
+    if (item.size > MAX_FILE) {
+      addMessage({ kind: "system", body: `"${item.name}" is too large to share (max ${formatBytes(MAX_FILE)}).` });
+      return;
+    }
     if (connected && window.SDZTransport) {
-      window.SDZTransport.send({ kind: "file-share", name: item.name, size: item.size, type: item.type });
+      const domId = "sdz-out-" + ++xferSeq;
+      addMessage({
+        kind: "file-progress",
+        domId,
+        body: item.name,
+        meta: `${formatBytes(item.size)} · sending 0%`,
+        mine: true,
+      });
+      window.SDZTransport.sendFile(item.file, (p) => {
+        updateProgress(domId, `${formatBytes(item.size)} · sending ${Math.round(p * 100)}%`);
+      })
+        .then(() => {
+          // Sender already has the file locally — offer it back as a download too.
+          finalizeFileMessage(domId, item, URL.createObjectURL(item.file), true);
+        })
+        .catch((err) => {
+          updateProgress(domId, `${formatBytes(item.size)} · send failed`);
+          console.error("[skool-dropzone] sendFile failed:", err);
+        });
+    } else {
+      addMessage({
+        kind: "file",
+        body: item.name,
+        meta: `${formatBytes(item.size)} · ${item.type || "application/octet-stream"} · shared (local-only — join a room to transmit)`,
+        mine: true,
+      });
     }
     unstage(id);
+  }
+
+  // === Phase 4: file message rendering (progress → done with download/preview) ===
+
+  function updateProgress(domId, metaText) {
+    const meta = document.querySelector(`#${PANEL_ID} #${CSS.escape(domId)} .sdz-msg-meta`);
+    if (meta) meta.textContent = metaText;
+  }
+
+  function finalizeFileMessage(domId, item, url, mine) {
+    const li = document.querySelector(`#${PANEL_ID} #${CSS.escape(domId)}`);
+    if (!li) return;
+    li.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "sdz-msg-row";
+    const icon = document.createElement("span");
+    icon.className = "sdz-msg-icon";
+    icon.textContent = "📎";
+    const name = document.createElement("span");
+    name.className = "sdz-msg-body";
+    name.textContent = item.name;
+    row.appendChild(icon);
+    row.appendChild(name);
+    li.appendChild(row);
+
+    const isImage = (item.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(item.name);
+    if (isImage) {
+      const img = document.createElement("img");
+      img.className = "sdz-msg-thumb";
+      img.src = url;
+      img.alt = item.name;
+      li.appendChild(img);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "sdz-msg-fileactions";
+    const dl = document.createElement("a");
+    dl.className = "sdz-btn sdz-btn-download";
+    dl.textContent = "Download";
+    dl.href = url;
+    dl.download = item.name;
+    actions.appendChild(dl);
+    if (mine) {
+      const tag = document.createElement("span");
+      tag.className = "sdz-sent-tag";
+      tag.textContent = "sent ✓";
+      actions.appendChild(tag);
+    }
+    li.appendChild(actions);
+
+    const list = document.querySelector(`#${PANEL_ID} .sdz-messages`);
+    if (list) list.scrollTop = list.scrollHeight;
   }
 
   function presentStaged(id) {
@@ -374,8 +505,9 @@
     if (!list) return;
     const li = document.createElement("li");
     li.className = `sdz-msg sdz-msg-${msg.kind}` + (msg.mine ? " sdz-msg-mine" : "");
+    if (msg.domId) li.id = msg.domId;
     const time = new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    if (msg.kind === "file") {
+    if (msg.kind === "file" || msg.kind === "file-progress") {
       li.innerHTML = `
         <div class="sdz-msg-row">
           <span class="sdz-msg-icon">📎</span>

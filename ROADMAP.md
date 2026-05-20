@@ -102,17 +102,21 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 4 — Files in chat ★
+## Phase 4 — Files in chat ★ ✅ built (commit pending push) — awaiting two-browser test
 
-**Goal:** Drop a file in the panel, others can download it. Same encrypted channel.
+**Goal:** Share a staged file; peers receive it, preview images, download anything. Same E2EE channel.
 
-- File picker + drag-drop into chat
-- Chunked transfer over the data channel (WebRTC supports binary)
-- Encrypt chunks, send, decrypt on the other side
-- Inline preview for images; download button for everything else
-- Size cap (start: 50 MB per file; raise later)
+**Built:**
+- `transport.sendFile(file, onProgress)` — reads file → 16KB chunks → base64 → each chunk rides inside the AES-GCM envelope → sent to all peers. Backpressure: pauses when any data channel buffers >1MB, resumes on drain. `file-start` / `file-chunk` / `file-end` control protocol.
+- Panel receive: reassembles chunks in order → Blob → object URL. Progress line updates live (`receiving 42%`). On complete: image thumbnail inline + Download button for everything.
+- Sender side: Share shows `sending %`, then `sent ✓` + a local Download.
+- 50 MB cap (oversize → system message, not sent).
 
-**Done when:** alice drops a 10 MB image, bob and charlie see it inline within seconds, relay sees only ciphertext.
+**Verified (Node):** chunk → base64 → reassemble is byte-exact across a 100,003-byte payload (7 chunks incl. partial tail). JS passes `node --check`. **Browser two-window transfer not yet operator-tested.**
+
+**Done when:** alice drops a 10 MB image, bob sees it inline + can download an identical file, relay sees only ciphertext. ⏳ *operator test pending.*
+
+**Deferred:** streaming reassembly for very large files (current path holds the file in memory); resumable transfers; multiple concurrent transfers UI polish.
 
 ---
 

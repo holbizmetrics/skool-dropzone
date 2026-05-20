@@ -208,8 +208,41 @@
 #skool-dropzone-panel .sdz-msg-icon {
   flex: 0 0 auto;
 }
-#skool-dropzone-panel .sdz-msg-file .sdz-msg-body {
+#skool-dropzone-panel .sdz-msg-file .sdz-msg-body,
+#skool-dropzone-panel .sdz-msg-file-progress .sdz-msg-body {
   font-weight: 500;
+}
+#skool-dropzone-panel .sdz-msg-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 6px;
+  margin-top: 6px;
+  object-fit: contain;
+  background: #fff;
+}
+#skool-dropzone-panel .sdz-msg-fileactions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+#skool-dropzone-panel .sdz-btn-download {
+  display: inline-block;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-btn-download:hover { background: #1d4ed8; }
+#skool-dropzone-panel .sdz-sent-tag {
+  font-size: 11px;
+  color: #065f46;
+  font-weight: 600;
 }
 
 #skool-dropzone-panel .sdz-composer {

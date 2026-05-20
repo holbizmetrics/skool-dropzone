@@ -180,9 +180,49 @@
     });
   }
 
+  // === Phase 4: chunked file transfer with backpressure ===
+
+  const CHUNK_BYTES = 16 * 1024; // raw bytes per chunk (base64 ~+33% on the wire)
+  const MAX_BUFFERED = 1024 * 1024; // pause sending if a channel buffers > 1MB
+
+  function anyChannelBusy() {
+    let busy = false;
+    peers.forEach((e) => {
+      if (e.dc && e.dc.readyState === "open" && e.dc.bufferedAmount > MAX_BUFFERED) busy = true;
+    });
+    return busy;
+  }
+
+  function waitForDrain() {
+    return new Promise((resolve) => {
+      const check = () => (anyChannelBusy() ? setTimeout(check, 50) : resolve());
+      check();
+    });
+  }
+
+  // Reads a File, chunks + encrypts + sends it to all peers. Returns the
+  // transfer id. onProgress(fraction 0..1) fires per chunk.
+  async function sendFile(file, onProgress) {
+    const id =
+      (crypto.randomUUID && crypto.randomUUID()) || "f" + Math.random().toString(36).slice(2);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const total = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
+
+    await send({ kind: "file-start", id, name: file.name, size: file.size, type: file.type, total });
+    for (let i = 0; i < total; i++) {
+      if (anyChannelBusy()) await waitForDrain();
+      const slice = bytes.subarray(i * CHUNK_BYTES, Math.min((i + 1) * CHUNK_BYTES, bytes.length));
+      await send({ kind: "file-chunk", id, seq: i, data: window.SDZCrypto.toB64(slice) });
+      if (onProgress) onProgress((i + 1) / total);
+    }
+    await send({ kind: "file-end", id });
+    return id;
+  }
+
   window.SDZTransport = {
     init,
     send,
+    sendFile,
     get peerId() {
       return peerId;
     },
