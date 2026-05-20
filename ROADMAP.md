@@ -122,19 +122,24 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 5 — Instant presentation v1 (file-as-deck) ★
+## Phase 5 — Instant presentation v1 (file-as-deck) ★ ✅ built (commit pending push) — the killer feature
 
-**Goal:** First version of the killer feature. Drop a file → fullscreen takeover for everyone in the room.
+**Goal:** Drop a file → fullscreen takeover for everyone in the room.
 
-- "Present this" button on any file in the chat
-- One presenter slot at a time (claim / release semantics)
-- File-as-deck rendering:
-  - PDF → page navigator, presenter controls page, everyone follows
-  - Image → fullscreen for all
-  - Video → synchronized playback (presenter controls play/pause/seek)
-- Esc / "End presentation" returns everyone to normal view
+**Built — shared module `content/present.js` (used by both panel and harness):**
+- Presenter clicks **Present** on a staged file → local fullscreen overlay opens AND the file is broadcast to all peers (reuses `sendFile` with a `present-*` wire prefix).
+- Viewers auto-open the same fullscreen overlay when the file arrives.
+- Sync per type:
+  - **Image** → shown fullscreen for all.
+  - **Video** → presenter's play / pause / seek broadcast as `present-control`; viewers follow (viewer controls hidden).
+  - **PDF** → presenter Prev/Next broadcasts `pdf-page`; viewers' iframe follows via `#page=N` (best-effort — Chrome PDF viewer).
+- **End ✕** / Esc (presenter) broadcasts `present-close` → everyone's overlay closes. Viewers get a **Leave ✕**.
+- Overlay styles extracted to shared `content/present.css` (loaded as content CSS on `/live/*` and via `<link>` in the harness).
+- Harness gained a **Present a file** button → Phase 5 is testable with two tabs, no meeting.
 
-**Done when:** alice drops a PDF, hits "Present," everyone sees page 1 fullscreen, alice clicks next, everyone advances. Same for image and video.
+**Done when:** alice presents an image/PDF/video, everyone sees it fullscreen; alice's video play/pause and PDF page-turns sync to all. ⏳ *two-tab browser test pending.*
+
+**Known limits (v1):** one presenter at a time (no explicit slot-lock yet — last Present wins); viewer video autoplay may need a click on some browsers (autoplay policy); PDF page-sync is best-effort via `#page` (reloads the frame); large presentation files transfer fully before the overlay opens for viewers.
 
 ---
 

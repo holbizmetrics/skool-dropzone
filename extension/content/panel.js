@@ -158,6 +158,8 @@
 
   function onRemoteMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
+    // Presentation messages (present-*) are handled by the shared module.
+    if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
     switch (obj.kind) {
       case "undecryptable":
         addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });
@@ -464,40 +466,9 @@
   function presentStaged(id) {
     const item = staged.get(id);
     if (!item) return;
-    presentLocally(item);
-  }
-
-  function presentLocally(item) {
-    const host = document.getElementById(HOST_ID);
-    if (!host) return;
-    const url = URL.createObjectURL(item.file);
-    const overlay = document.createElement("div");
-    overlay.className = "sdz-present-overlay";
-    const isImage = (item.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(item.name);
-    const isVideo = (item.type || "").startsWith("video/") || /\.(mp4|webm|mov)$/i.test(item.name);
-    let media;
-    if (isImage) media = `<img class="sdz-present-media" src="${url}" alt="${escapeHtml(item.name)}" />`;
-    else if (isVideo) media = `<video class="sdz-present-media" src="${url}" controls autoplay></video>`;
-    else media = `<iframe class="sdz-present-media" src="${url}"></iframe>`;
-    overlay.innerHTML = `
-      <div class="sdz-present-bar">
-        <span class="sdz-present-title">Presenting (local preview) — ${escapeHtml(item.name)}</span>
-        <span class="sdz-present-note">Phase 5 will sync this to everyone in the room</span>
-        <button type="button" class="sdz-present-close" title="End preview">End ✕</button>
-      </div>
-      ${media}
-    `;
-    host.appendChild(overlay);
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      overlay.remove();
-      document.removeEventListener("keydown", onEsc);
-    };
-    const onEsc = (e) => {
-      if (e.key === "Escape") cleanup();
-    };
-    overlay.querySelector(".sdz-present-close").addEventListener("click", cleanup);
-    document.addEventListener("keydown", onEsc);
+    // Shared module: presenter overlay + broadcast to peers (or local preview
+    // if not joined to a room). Viewers receive via SDZPresent.handleMessage.
+    if (window.SDZPresent) window.SDZPresent.presentFile(item.file, window.SDZTransport);
   }
 
   // === messages ===

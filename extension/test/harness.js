@@ -54,6 +54,8 @@
 
   function onMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
+    // Phase 5: presentation messages handled by the shared module.
+    if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
     switch (obj.kind) {
       case "undecryptable":
         addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");
@@ -154,5 +156,17 @@
     } catch (err) {
       li.textContent = `send failed: ${err}`;
     }
+  });
+
+  $("present").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!connected) {
+      addLine("sys", "join a room first, then present a file");
+      return;
+    }
+    addLine("me", `presenting "${f.name}" to the room…`);
+    window.SDZPresent.presentFile(f, window.SDZTransport);
   });
 })();
