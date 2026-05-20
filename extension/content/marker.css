@@ -1,0 +1,21 @@
+#skool-dropzone-marker {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2147483647;
+  background: #1f2937;
+  color: #fff;
+  font: 600 11px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.08em;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  user-select: none;
+  opacity: 0.85;
+}
+
+#skool-dropzone-marker:hover {
+  opacity: 1;
+}

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "skool-dropzone",
+  "version": "0.0.1",
+  "description": "Member-side companion for Skool meetings — drop zone + chat + whiteboard + video share + instant presentation. Currently Phase 0 (scaffolding).",
+  "content_scripts": [
+    {
+      "matches": ["https://*.skool.com/*"],
+      "js": ["content/marker.js"],
+      "css": ["content/marker.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_title": "skool-dropzone (Phase 0)",
+    "default_popup": "popup/popup.html"
+  }
+}
