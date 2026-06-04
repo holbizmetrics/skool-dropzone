@@ -124,7 +124,7 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ## Phase 5 — Instant presentation v1 (file-as-deck) ★ ✅ built + two-tab browser VERIFIED (2026-06-04) — the killer feature
 
-> **Two-tab browser test passed (2026-06-04):** loaded unpacked v0.7.0 + localhost relay; two harness tabs joined → `🔒 E2EE · 1 peer connected` (live WebRTC handshake confirmed); **Present a file → fullscreen overlay opened for the viewer** (the post-fix behavior — no longer a chat download). This also exercises the Phase-2 data channel + Phase-4 chunked send path the presentation rides on.
+> **Two-tab browser test passed (2026-06-04):** loaded unpacked v0.7.0 + localhost relay; two harness tabs joined → `🔒 E2EE · 1 peer connected` (live WebRTC handshake confirmed). Confirmed against a real peer in the same session: **text both directions** (Phase 2/3 — `peer: Hello` / `you: Hello, back`), **file send** (Phase 4 chunked transfer — `sent "…" ✓`), and **Present a file → fullscreen overlay opened for the viewer** (Phase-5 fix — no longer a chat download). Untouched this pass: real-Skool-meeting detection path, 3+ peers, whiteboard click.
 
 **Goal:** Drop a file → fullscreen takeover for everyone in the room.
 
