@@ -122,7 +122,9 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 5 — Instant presentation v1 (file-as-deck) ★ ✅ built (commit pending push) — the killer feature
+## Phase 5 — Instant presentation v1 (file-as-deck) ★ ✅ built + two-tab browser VERIFIED (2026-06-04) — the killer feature
+
+> **Two-tab browser test passed (2026-06-04):** loaded unpacked v0.7.0 + localhost relay; two harness tabs joined → `🔒 E2EE · 1 peer connected` (live WebRTC handshake confirmed); **Present a file → fullscreen overlay opened for the viewer** (the post-fix behavior — no longer a chat download). This also exercises the Phase-2 data channel + Phase-4 chunked send path the presentation rides on.
 
 **Goal:** Drop a file → fullscreen takeover for everyone in the room.
 
@@ -166,7 +168,9 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 7 — Presentation modes v2 (type-as-slides + BYO deck) ✅ built (2026-06-04) — awaiting two-tab test
+## Phase 7 — Presentation modes v2 (type-as-slides + BYO deck) ✅ built + two-tab browser VERIFIED (2026-06-04)
+
+> **Two-tab browser test passed (2026-06-04):** typed title + bullets → **Present slide** → styled fullscreen slide opened for the viewer tab over the live E2EE channel.
 
 **Goal:** Round out the three presentation modes.
 
