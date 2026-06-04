@@ -54,3 +54,45 @@
   border: 0;
   background: #000;
 }
+
+/* Phase 7 — type-as-slides */
+.sdz-slide-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1220;
+  overflow: auto;
+}
+.sdz-slide {
+  position: relative;
+  width: min(1100px, 90%);
+  max-height: 90%;
+  box-sizing: border-box;
+  padding: 7vmin 8vmin;
+  background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  color: #f1f5f9;
+  font: 400 2.6vmin/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.sdz-slide-title {
+  margin: 0 0 0.6em 0;
+  font-size: 5.2vmin;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #fff;
+}
+.sdz-slide-bullets {
+  margin: 0;
+  padding-left: 1.1em;
+}
+.sdz-slide-bullets li {
+  margin: 0.45em 0;
+}
+.sdz-slide-page {
+  position: absolute;
+  bottom: 2.2vmin;
+  right: 3vmin;
+  font-size: 1.9vmin;
+  color: #94a3b8;
+}

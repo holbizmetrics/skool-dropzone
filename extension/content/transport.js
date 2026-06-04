@@ -202,20 +202,26 @@
 
   // Reads a File, chunks + encrypts + sends it to all peers. Returns the
   // transfer id. onProgress(fraction 0..1) fires per chunk.
-  async function sendFile(file, onProgress) {
+  //
+  // prefix selects the wire frame family: "file" (default — Phase 4 chat
+  // transfer, routed by panel/harness) or "present" (Phase 5 — routed by
+  // SDZPresent.handleMessage so viewers open the fullscreen overlay). The
+  // receiver discriminates on the kind, so the prefix MUST match what the
+  // intended handler listens for, or the file silently lands in the wrong UI.
+  async function sendFile(file, onProgress, prefix = "file") {
     const id =
       (crypto.randomUUID && crypto.randomUUID()) || "f" + Math.random().toString(36).slice(2);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const total = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
 
-    await send({ kind: "file-start", id, name: file.name, size: file.size, type: file.type, total });
+    await send({ kind: prefix + "-start", id, name: file.name, size: file.size, type: file.type, total });
     for (let i = 0; i < total; i++) {
       if (anyChannelBusy()) await waitForDrain();
       const slice = bytes.subarray(i * CHUNK_BYTES, Math.min((i + 1) * CHUNK_BYTES, bytes.length));
-      await send({ kind: "file-chunk", id, seq: i, data: window.SDZCrypto.toB64(slice) });
+      await send({ kind: prefix + "-chunk", id, seq: i, data: window.SDZCrypto.toB64(slice) });
       if (onProgress) onProgress((i + 1) / total);
     }
-    await send({ kind: "file-end", id });
+    await send({ kind: prefix + "-end", id });
     return id;
   }
 

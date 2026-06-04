@@ -139,7 +139,11 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 **Done when:** alice presents an image/PDF/video, everyone sees it fullscreen; alice's video play/pause and PDF page-turns sync to all. ⏳ *two-tab browser test pending.*
 
-**Known limits (v1):** one presenter at a time (no explicit slot-lock yet — last Present wins); viewer video autoplay may need a click on some browsers (autoplay policy); PDF page-sync is best-effort via `#page` (reloads the frame); large presentation files transfer fully before the overlay opens for viewers.
+**Bug found + fixed (2026-06-04, by the verification pass):** the presenter broadcast was **broken** — `present.js` called `transport.sendFile(file, null, "present")` expecting a `present-*` wire prefix, but `transport.sendFile` only took two params and hardcoded `file-start`/`file-chunk`/`file-end`. So a presented file went out as a plain Phase-4 transfer and viewers (which route on `present-start`) never opened the fullscreen overlay — it landed as a chat download instead. Fixed by adding the `prefix` parameter to `sendFile`; guarded by `node extension/test/node-verify.js` so it can't silently regress.
+
+**Slot-lock added (2026-06-04, Phase-8 hardening pulled forward):** a soft presenter lock now covers the two common races — you can't start presenting over a presentation you're *watching*, and an incoming presentation can't hijack *your* screen while you present. The remaining race (two people hit Present in the same instant, before either sees the other) still resolves last-wins among viewers; a true global lock needs a peerId-tiebreak claim token — deferred to Phase 8.
+
+**Known limits (v1):** viewer video autoplay may need a click on some browsers (autoplay policy); PDF page-sync is best-effort via `#page` (reloads the frame); large presentation files transfer fully before the overlay opens for viewers.
 
 ---
 
@@ -162,14 +166,17 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 7 — Presentation modes v2 (type-as-slides + BYO deck)
+## Phase 7 — Presentation modes v2 (type-as-slides + BYO deck) ✅ built (2026-06-04) — awaiting two-tab test
 
 **Goal:** Round out the three presentation modes.
 
-- **Type-as-slides:** dedicated "promote to slide" affordance in chat — typed bullets become a styled slide everyone sees
-- **Bring-your-own-deck:** PPT / Keynote / PDF upload that loads into the presenter overlay (PPT/Keynote likely converted to PDF first; Office formats are heavy — could defer to "PDF export your deck first")
+**Built — in `content/present.js` (+ `present.css` slide styles, panel + harness UI):**
+- **Type-as-slides:** a "▤ Slide" affordance in the panel opens a title + bullets composer; promoting broadcasts the deck as one E2EE `slide-show` frame (pure text, no file transfer). Viewers open the same styled fullscreen slide. A line of `---` in the bullets box separates multiple slides; presenter Prev/Next syncs page turns via `slide-page`. New API: `SDZPresent.presentSlides(slides, transport, startIndex)`; wire kinds `slide-show` / `slide-page` (+ reuses `present-close`).
+- **Bring-your-own-deck:** PDF decks already load + page-sync through the Phase-5 file-as-deck path (`Present` on a staged PDF). PPT/Keynote conversion is **deferred by design** — export to PDF first (Office formats are heavy; see cross-phase note).
 
-**Done when:** alice types three bullets, promotes them to a slide, everyone sees the styled slide; alice loads `deck.pdf`, walks through it.
+**Done when:** alice types three bullets, promotes them to a slide, everyone sees the styled slide; alice loads `deck.pdf`, walks through it. ⏳ *two-tab browser test pending (logic + wiring covered by `node extension/test/node-verify.js`).*
+
+**Known limits (v1):** slides are title + flat bullets (no images/markdown in a slide yet); page-turn sync is index-based (a viewer who joins mid-deck gets the current index but not earlier history); PPT/Keynote import not done.
 
 ---
 

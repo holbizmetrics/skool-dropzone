@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.6.0",
-  "description": "Member-side companion for Skool meetings — chat-with-files + whiteboard + instant presentation, all E2EE. Phase 6 (shared whiteboard).",
+  "version": "0.7.0",
+  "description": "Member-side companion for Skool meetings — chat-with-files + whiteboard + instant presentation (files & type-as-slides), all E2EE. Phase 7.",
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -17,7 +17,7 @@
     }
   ],
   "action": {
-    "default_title": "skool-dropzone (Phase 6)",
+    "default_title": "skool-dropzone (Phase 7)",
     "default_popup": "popup/popup.html"
   }
 }

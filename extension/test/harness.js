@@ -178,4 +178,35 @@
     }
     window.SDZWhiteboard.toggle(window.SDZTransport);
   });
+
+  $("slide-present").addEventListener("click", () => {
+    if (!connected) {
+      addLine("sys", "join a room first, then present a slide");
+      return;
+    }
+    const title = ($("slide-title").value || "").trim();
+    const blocks = ($("slide-bullets").value || "").split(/\n-{3,}\s*\n/);
+    const linesOf = (b) => b.split("\n").map((l) => l.trim()).filter(Boolean);
+    let slides;
+    if (title) {
+      slides = [{ title, bullets: linesOf(blocks[0]) }];
+      blocks.slice(1).forEach((b) => {
+        const ls = linesOf(b);
+        if (ls.length) slides.push({ title: ls[0], bullets: ls.slice(1) });
+      });
+    } else {
+      slides = blocks.map((b) => {
+        const ls = linesOf(b);
+        return ls.length ? { title: ls[0], bullets: ls.slice(1) } : null;
+      }).filter(Boolean);
+    }
+    const res = window.SDZPresent.presentSlides(slides, window.SDZTransport);
+    if (res && res.ok === false) {
+      addLine("sys", res.reason);
+      return;
+    }
+    addLine("me", `presenting ${slides.length} slide(s) to the room…`);
+    $("slide-title").value = "";
+    $("slide-bullets").value = "";
+  });
 })();

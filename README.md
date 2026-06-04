@@ -50,7 +50,24 @@ For member-only meetings, where the whole point is "admins aren't here" — that
 
 ## Status
 
-Idea stage. No code yet. Repo opened to hold the scope as it firms up.
+**Working extension, Phases 0–7 built (v0.7.0).** The spine is in place:
+
+- **Phases 0–1** — MV3 extension loads on `skool.com/live/*`, auto-opens a docked panel when a Stream.io call starts.
+- **Phase 2–3** — E2EE WebRTC mesh (PBKDF2 → AES-GCM), localhost signaling relay, multi-peer presence.
+- **Phase 4** — chunked E2EE file transfer with backpressure.
+- **Phase 5** — instant presentation (file-as-deck): image/PDF/video take over everyone's screen; presenter controls sync.
+- **Phase 6** — shared whiteboard overlay (normalized coords, per-segment broadcast).
+- **Phase 7** — type-as-slides (promote typed bullets to a styled slide everyone sees); bring-your-own-deck for PDF rides the Phase-5 file-as-deck path (PPT/Keynote → export to PDF first, by design).
+
+**Verification.** The browser-independent layers are covered by headless harnesses that run in CI-style:
+
+- `node extension/test/node-verify.js` — crypto E2EE round-trip, cross-passphrase isolation, byte-exact file chunk/reassembly (incl. out-of-order), and wire-frame contract guards (20 checks).
+- `node signaling/node-verify-signaling.js` — relay room-routing, targeted SDP/ICE relay, room isolation, leave handling (12 checks).
+- `extension/test/harness.html` — two-tab manual test of the live WebRTC mesh, file transfer, presentation, whiteboard, and slides (no Skool meeting needed).
+
+**Still needs a real browser** to confirm end-to-end: the RTCPeerConnection handshake, data-channel mesh, and the fullscreen overlays. Load the unpacked extension (or open the harness in two tabs) for that pass.
+
+Remaining roadmap: PPT/Keynote import (Phase 7 stretch), Phase 8 security audit, Phase 9 beta + Chrome Web Store. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Open questions
 
@@ -61,4 +78,4 @@ Idea stage. No code yet. Repo opened to hold the scope as it firms up.
 
 ## License
 
-TBD.
+MIT — see [`LICENSE`](LICENSE).

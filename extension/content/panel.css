@@ -173,6 +173,60 @@
   cursor: pointer;
 }
 #skool-dropzone-panel .sdz-wb-toggle:hover { background: #f3f4f6; }
+#skool-dropzone-panel .sdz-slide-toggle {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-slide-toggle:hover { background: #f3f4f6; }
+
+#skool-dropzone-panel .sdz-slide-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #faf5ff;
+}
+#skool-dropzone-panel .sdz-slide-title-in,
+#skool-dropzone-panel .sdz-slide-bullets-in {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  padding: 7px 9px;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #111827;
+  resize: vertical;
+}
+#skool-dropzone-panel .sdz-slide-compose-actions {
+  display: flex;
+  gap: 6px;
+}
+#skool-dropzone-panel .sdz-slide-present {
+  border: 1px solid #7c3aed;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-slide-present:hover { background: #6d28d9; }
+#skool-dropzone-panel .sdz-slide-cancel {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-slide-cancel:hover { background: #f3f4f6; }
 
 #skool-dropzone-panel .sdz-messages {
   flex: 1 1 auto;

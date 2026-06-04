@@ -55,7 +55,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.3.0</span>
+          <span class="sdz-version">v0.7.0</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -68,6 +68,16 @@
 
       <div class="sdz-tools">
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
+        <button class="sdz-slide-toggle" type="button" title="Type a slide and present it">▤ Slide</button>
+      </div>
+
+      <div class="sdz-slide-compose" hidden>
+        <input class="sdz-slide-title-in" type="text" placeholder="Slide title" autocomplete="off" />
+        <textarea class="sdz-slide-bullets-in" rows="4" placeholder="One bullet per line.&#10;Separate multiple slides with a line of ---"></textarea>
+        <div class="sdz-slide-compose-actions">
+          <button class="sdz-slide-present" type="button">Present slide</button>
+          <button class="sdz-slide-cancel" type="button">Cancel</button>
+        </div>
       </div>
 
       <ul class="sdz-messages" role="log" aria-live="polite"></ul>
@@ -99,6 +109,7 @@
     panel.querySelector(".sdz-wb-toggle").addEventListener("click", () => {
       if (window.SDZWhiteboard) window.SDZWhiteboard.toggle(window.SDZTransport);
     });
+    wireSlideCompose(panel);
 
     wireDragDrop(panel);
   }
@@ -476,7 +487,67 @@
     if (!item) return;
     // Shared module: presenter overlay + broadcast to peers (or local preview
     // if not joined to a room). Viewers receive via SDZPresent.handleMessage.
-    if (window.SDZPresent) window.SDZPresent.presentFile(item.file, window.SDZTransport);
+    if (window.SDZPresent) {
+      const res = window.SDZPresent.presentFile(item.file, window.SDZTransport);
+      Promise.resolve(res).then((r) => {
+        if (r && r.ok === false) addMessage({ kind: "system", body: r.reason });
+      });
+    }
+  }
+
+  // === Phase 7: type-as-slides ===
+
+  function wireSlideCompose(panel) {
+    const box = panel.querySelector(".sdz-slide-compose");
+    const titleIn = panel.querySelector(".sdz-slide-title-in");
+    const bulletsIn = panel.querySelector(".sdz-slide-bullets-in");
+    const toggle = panel.querySelector(".sdz-slide-toggle");
+    if (!box || !toggle) return;
+
+    const hide = () => {
+      box.hidden = true;
+    };
+    toggle.addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      if (!box.hidden) setTimeout(() => titleIn && titleIn.focus(), 30);
+    });
+    panel.querySelector(".sdz-slide-cancel").addEventListener("click", hide);
+    panel.querySelector(".sdz-slide-present").addEventListener("click", () => {
+      if (!window.SDZPresent) return;
+      const title = (titleIn.value || "").trim();
+      const body = bulletsIn.value || "";
+      const blocks = body.split(/\n-{3,}\s*\n/); // --- separates extra slides
+      let slides;
+      if (title) {
+        // Explicit title field owns slide 1; its bullets are the first block's
+        // lines. Any further --- blocks parse as their own titled slides.
+        slides = [{ title, bullets: linesOf(blocks[0]) }];
+        blocks.slice(1).forEach((b) => {
+          const ls = linesOf(b);
+          if (ls.length) slides.push({ title: ls[0], bullets: ls.slice(1) });
+        });
+      } else {
+        // No title field: every block is line-1-title + rest-bullets.
+        slides = blocks
+          .map((b) => {
+            const ls = linesOf(b);
+            return ls.length ? { title: ls[0], bullets: ls.slice(1) } : null;
+          })
+          .filter(Boolean);
+      }
+      const res = window.SDZPresent.presentSlides(slides, window.SDZTransport);
+      if (res && res.ok === false) {
+        addMessage({ kind: "system", body: res.reason });
+        return;
+      }
+      titleIn.value = "";
+      bulletsIn.value = "";
+      hide();
+    });
+  }
+
+  function linesOf(block) {
+    return block.split("\n").map((l) => l.trim()).filter(Boolean);
   }
 
   // === messages ===
