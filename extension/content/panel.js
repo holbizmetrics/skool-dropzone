@@ -10,6 +10,7 @@
   const CALL_ROOT_SELECTOR = ".str-video__call-controls";
 
   const MAX_FILE = 50 * 1024 * 1024; // 50 MB cap for Phase 4
+  const MAX_CHUNKS = Math.ceil(MAX_FILE / (16 * 1024)) + 2; // receive-side total guard (SECURITY-AUDIT P2)
 
   let isOpen = false;
   let inCall = false;
@@ -202,6 +203,9 @@
 
   function startIncoming(obj) {
     if (obj.size > MAX_FILE) return; // sender should have blocked it; ignore
+    // total is attacker-controlled off the wire — never allocate on an
+    // unvalidated count (SECURITY-AUDIT P2 — one-frame OOM).
+    if (!Number.isInteger(obj.total) || obj.total < 1 || obj.total > MAX_CHUNKS) return;
     const domId = "sdz-in-" + obj.id;
     incoming.set(obj.id, {
       name: obj.name,
@@ -224,6 +228,7 @@
   function chunkIncoming(obj) {
     const t = incoming.get(obj.id);
     if (!t) return;
+    if (!Number.isInteger(obj.seq) || obj.seq < 0 || obj.seq >= t.total) return; // P2: bound seq
     if (t.parts[obj.seq] === undefined) {
       t.parts[obj.seq] = obj.data;
       t.received++;

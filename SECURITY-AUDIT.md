@@ -32,7 +32,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 | H1 | No relay admission control; **relay binds `0.0.0.0` → LAN-reachable** | **HIGH** | primary; reach upgraded by blind-verify | LAN-reach FIXED 2026-06-09; admission gap OPEN |
 | P1 | Present/whiteboard control frames accept no sender-binding | **HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified; browser UX owed) |
 | H2 | Convenience mode = obfuscation; privacy promise the user can't verify | **HIGH** | primary; reframed by ADEIS | VERIFIED (mode), REASONED (UX) |
-| P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | INSPECTION |
+| P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified) |
 | M1 | Malicious-relay handshake MITM (fatal only in convenience mode) | MED | primary | REASONED |
 | M2 | Shared-key group: any member forges/replays (no per-sender identity) | MED | primary | INSPECTION |
 | P3 | Relay: unbounded rooms, client-asserted `peerId`, spoofable `signal.from` | MED | completeness critic | INSPECTION |
@@ -40,7 +40,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 | P5 | Manifest: dead `host_permissions`, no CSP, hardcoded cleartext `ws://` | MED | completeness critic | INSPECTION |
 | L1 | Deterministic salt -> precomputation (FORCED by no-key-exchange design) | LOW | primary | VERIFIED |
 | P6 | Peer-set blob MIME -> download-then-open renders as HTML | LOW-MED | completeness critic | INSPECTION |
-| P7 | No `package-lock.json` (`ws ^8.18.0` floats; declared ver past CVE-2024-37890) | LOW | completeness critic | INSPECTION |
+| P7 | No `package-lock.json` (`ws ^8.18.0` floats; declared ver past CVE-2024-37890) | LOW | completeness critic | FIXED 2026-06-09 (lockfile, ws 8.20.1) |
 | L2 | AES-GCM IV — fresh per message, fine at meeting volumes | CLEAR | primary | VERIFIED |
 
 ---
@@ -74,6 +74,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 - **Attacker:** any room peer. **Impact:** a single `*-start` frame with `total: 2e9` allocates a multi-billion-element array -> instant tab OOM for every viewer; high/negative `seq` balloons sparse arrays and desyncs reassembly.
 - **Fix:** clamp `0 < total <= ceil(MAX_FILE/CHUNK)` and `0 <= seq < total` before allocating/indexing, in both `panel.js` and `present.js`.
 - **Convergence:** both verifiers (extends the auditor's M3).
+- **Resolved 2026-06-09:** receive paths now reject a non-integer / `<1` / `> MAX_CHUNKS` `total` before allocating, and bound `0 <= seq < total` before indexing — in both `panel.js` (file-*) and `present.js` (present-*). Behaviorally verified in `node-verify.js` (a `total: 1e6` `present-start` opens no overlay). Note: the dev test harness (`harness.js`) is a chrome-extension-only test surface and was left unguarded; only the production receive paths are hardened.
 
 ### M1 [MED] Malicious-relay WebRTC MITM
 - **Where:** unauthenticated signaling; DTLS fingerprints ride inside SDP relayed verbatim (`transport.js:100,137`; `server.js:56`).
@@ -101,6 +102,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 
 ### P7 [LOW] Supply chain
 - **Where:** `signaling/package.json:11` pins `ws: ^8.18.0`. The declared floor is **past** the CVE-2024-37890 fix (8.17.1), so the version itself is clean — but there is **no `package-lock.json`**, so `^8.18.0` floats at install time with no integrity pinning. **Fix:** commit a lockfile. ([CVE-2024-37890 / Snyk SNYK-JS-WS-7266574])
+- **Resolved 2026-06-09:** `package-lock.json` generated (`npm install --package-lock-only`); `ws` pinned at **8.20.1** (past the 8.17.1 CVE fix). Integrity now locked at install time.
 
 ### L2 [CLEAR] AES-GCM IV — verified fine
 - `crypto.js:69` uses `crypto.getRandomValues(new Uint8Array(12))` fresh per `encrypt`, including per file chunk. Random 96-bit IV collision risk is negligible at meeting volumes. No action.

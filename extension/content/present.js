@@ -20,6 +20,7 @@
 (() => {
   let active = null; // { overlay, url, ownsUrl, applyControl, applyPage, mode }
   const incoming = new Map(); // id -> { name, type, total, parts[], received }
+  const MAX_CHUNKS = 32 * 1024; // receive-side total guard (~512MB) — rejects a pathological present-start total (SECURITY-AUDIT P2)
 
   // Presenter slot guard (Phase 8 hardening of the Phase 5 "last Present wins"
   // limit). We hold a soft lock for the two common races:
@@ -365,11 +366,14 @@
       case "present-start":
         // Don't let a peer's presentation hijack your screen while YOU present.
         if (busyAsPresenter()) return true; // swallow; we hold the slot
+        // total is attacker-controlled — never allocate on an unvalidated count
+        // (SECURITY-AUDIT P2 — one-frame OOM).
+        if (!Number.isInteger(obj.total) || obj.total < 1 || obj.total > MAX_CHUNKS) return true;
         incoming.set(obj.id, { name: obj.name, type: obj.type, total: obj.total, parts: new Array(obj.total), received: 0, from: fromPeer });
         return true;
       case "present-chunk": {
         const t = incoming.get(obj.id);
-        if (t && t.parts[obj.seq] === undefined) {
+        if (t && Number.isInteger(obj.seq) && obj.seq >= 0 && obj.seq < t.total && t.parts[obj.seq] === undefined) {
           t.parts[obj.seq] = obj.data;
           t.received++;
         }

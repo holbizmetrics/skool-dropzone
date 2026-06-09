@@ -246,6 +246,29 @@ function bytesEqual(a, b) {
     globalThis.URL = savedURL;
   }
 
+  console.log("\nSECURITY-AUDIT P2 — receiver clamps on attacker-controlled total/seq:");
+  {
+    const presentSrc3 = fs.readFileSync(path.join(__dirname, "..", "content", "present.js"), "utf8");
+    const panelSrc2 = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    check("present.js clamps present-start total", /obj\.total > MAX_CHUNKS/.test(presentSrc3));
+    check("present.js bounds present-chunk seq", /obj\.seq < t\.total/.test(presentSrc3));
+    check("panel.js clamps file-start total", /obj\.total > MAX_CHUNKS/.test(panelSrc2));
+    check("panel.js bounds file-chunk seq", /obj\.seq >= t\.total/.test(panelSrc2));
+
+    // behavioral: an out-of-range total must be rejected (no overlay opens, no alloc).
+    const stubEl = () => ({ className: "", textContent: "", src: "", alt: "", controls: false, dataset: {}, style: {}, appendChild() {}, addEventListener() {}, removeEventListener() {}, remove() {}, classList: { toggle() {}, add() {}, remove() {} } });
+    const sDoc = globalThis.document, sURL = globalThis.URL;
+    globalThis.document = { createElement: stubEl, documentElement: { appendChild() {} }, addEventListener() {}, removeEventListener() {} };
+    globalThis.URL = { createObjectURL: () => "blob:stub", revokeObjectURL() {} };
+    const P = globalThis.window.SDZPresent;
+    P.handleMessage({ kind: "present-start", id: "big", name: "x.png", type: "image/png", total: 1e6 }, "A"); // > MAX_CHUNKS
+    P.handleMessage({ kind: "present-chunk", id: "big", seq: 0, data: SDZCrypto.toB64(new Uint8Array([65])) }, "A");
+    P.handleMessage({ kind: "present-end", id: "big" }, "A");
+    check("present-start with out-of-range total is rejected (no overlay)", P.active === false);
+    globalThis.document = sDoc;
+    globalThis.URL = sURL;
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));
