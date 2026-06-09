@@ -30,7 +30,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 | # | Finding | Sev | Provenance | Status |
 |---|---------|-----|-----------|--------|
 | H1 | No relay admission control; **relay binds `0.0.0.0` → LAN-reachable** | **HIGH** | primary; reach upgraded by blind-verify | LAN-reach FIXED 2026-06-09; admission gap OPEN |
-| P1 | Present/whiteboard control frames accept no sender-binding | **HIGH** | both verifiers converged | INSPECTION |
+| P1 | Present/whiteboard control frames accept no sender-binding | **HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified; browser UX owed) |
 | H2 | Convenience mode = obfuscation; privacy promise the user can't verify | **HIGH** | primary; reframed by ADEIS | VERIFIED (mode), REASONED (UX) |
 | P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | INSPECTION |
 | M1 | Malicious-relay handshake MITM (fatal only in convenience mode) | MED | primary | REASONED |
@@ -61,6 +61,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 - **Impact:** force-open a fullscreen overlay on every viewer (`present.js:373`); force-close the legitimate presenter's deck for everyone (`present.js:381`); drive another member's video play/pause/seek (`present.js:378` -> `:142-151`) or flip their slide page (`slide-page :388`); flood `wb-stroke` (auto-opens the whiteboard on every peer, `whiteboard.js:191`) and grow `strokes[]` unbounded; `wb-clear` wipes the shared board for everyone (`whiteboard.js:197`).
 - **Fix:** thread `fromPeer` into `handleMessage`; bind `active` to its opener's peerId; reject control/close frames from any other peer; rate-limit and cap `strokes[]`.
 - **Convergence:** independently found by both verifiers.
+- **Resolved 2026-06-09:** `fromPeer` now threaded through both dispatch sites (`panel.js`, `harness.js`); each viewer overlay records its opening peer (`active.presenter`); `present-control` / `present-close` / `slide-page` honored **only** from that peer; `present-end` / `slide-show` refuse to hijack a presentation you're watching from a different peer; whiteboard buffer capped (`MAX_STROKES`) against stroke-flood. Behaviorally verified in `node-verify.js` (foreign `present-close` rejected, owner close works, hijack blocked) — 4 new behavioral + 8 static contract checks. **Browser UX retest still owed** (the security gate is verified; legitimate presenter rendering/video-PDF sync needs the two-tab test). **Left as a product decision:** the whiteboard is collaborative (no single owner), so `wb-clear`-by-any-peer and auto-open-on-peer-stroke are unchanged — owner-gating those changes the product.
 
 ### H2 [HIGH] Convenience mode is obfuscation, and the user can't tell
 - **Where:** `crypto.js:45-65` (empty passphrase -> key = f(meetingId)); `panel.js:123` (`convenienceMode = !passphrase`); `panel.js:64` placeholder invites blank; `panel.js:162` flags it only as a short "convenience mode" status string.

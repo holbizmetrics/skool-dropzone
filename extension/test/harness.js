@@ -55,8 +55,8 @@
   function onMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
     // Phase 5/6: presentation + whiteboard handled by their shared modules.
-    if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
-    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj)) return;
+    if (window.SDZPresent && window.SDZPresent.handleMessage(obj, fromPeer)) return;
+    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj, fromPeer)) return;
     switch (obj.kind) {
       case "undecryptable":
         addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");

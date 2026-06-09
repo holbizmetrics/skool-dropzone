@@ -177,8 +177,8 @@
   function onRemoteMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
     // Presentation (present-*) and whiteboard (wb-*) are handled by their modules.
-    if (window.SDZPresent && window.SDZPresent.handleMessage(obj)) return;
-    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj)) return;
+    if (window.SDZPresent && window.SDZPresent.handleMessage(obj, fromPeer)) return;
+    if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj, fromPeer)) return;
     switch (obj.kind) {
       case "undecryptable":
         addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });

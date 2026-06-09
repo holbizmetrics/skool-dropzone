@@ -180,6 +180,72 @@ function bytesEqual(a, b) {
     check("presenter slot guard: refuses to present over a presentation you're watching", /watchingSomeoneElse\(\)/.test(presentSrc));
   }
 
+  console.log("\nSECURITY-AUDIT P1 — control-frame sender-binding (static contract):");
+  {
+    const presentSrc = fs.readFileSync(path.join(__dirname, "..", "content", "present.js"), "utf8");
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const harnessSrc = fs.readFileSync(path.join(__dirname, "harness.js"), "utf8");
+    const wbSrc = fs.readFileSync(path.join(__dirname, "..", "content", "whiteboard.js"), "utf8");
+    check("present.handleMessage takes fromPeer", /function handleMessage\(obj,\s*fromPeer\)/.test(presentSrc));
+    check("viewer overlay records its presenter peer", /presenter: t\.from/.test(presentSrc) && /presenter: fromPeer/.test(presentSrc));
+    check("present-control honored only from the presenter", /case "present-control":[\s\S]{0,80}fromPresenter\(fromPeer\)/.test(presentSrc));
+    check("present-close honored only from the presenter", /case "present-close":[\s\S]{0,80}fromPresenter\(fromPeer\)/.test(presentSrc));
+    check("slide-page honored only from the presenter", /case "slide-page":[\s\S]{0,80}fromPresenter\(fromPeer\)/.test(presentSrc));
+    check("panel dispatch passes fromPeer to handleMessage", /SDZPresent\.handleMessage\(obj,\s*fromPeer\)/.test(panelSrc) && /SDZWhiteboard\.handleMessage\(obj,\s*fromPeer\)/.test(panelSrc));
+    check("harness dispatch passes fromPeer to handleMessage", /SDZPresent\.handleMessage\(obj,\s*fromPeer\)/.test(harnessSrc) && /SDZWhiteboard\.handleMessage\(obj,\s*fromPeer\)/.test(harnessSrc));
+    check("whiteboard caps stroke buffer (flood guard)", /MAX_STROKES/.test(wbSrc) && /strokes\.splice\(0,/.test(wbSrc));
+  }
+
+  console.log("\nSECURITY-AUDIT P1 — control-frame sender-binding (behavioral, DOM-stubbed):");
+  {
+    // Minimal DOM/URL stub so present.js's open()/close() run headless. We only
+    // observe the security-relevant state (SDZPresent.active), not rendering.
+    const stubEl = () => ({
+      className: "", textContent: "", src: "", alt: "", controls: false,
+      dataset: {}, style: {},
+      appendChild() {}, addEventListener() {}, removeEventListener() {}, remove() {},
+      classList: { toggle() {}, add() {}, remove() {} },
+    });
+    const savedDoc = globalThis.document, savedURL = globalThis.URL;
+    globalThis.document = {
+      createElement: stubEl,
+      documentElement: { appendChild() {} },
+      addEventListener() {}, removeEventListener() {},
+    };
+    globalThis.URL = { createObjectURL: () => "blob:stub", revokeObjectURL() {} };
+
+    const presentSrc2 = fs.readFileSync(path.join(__dirname, "..", "content", "present.js"), "utf8");
+    vm.runInThisContext(presentSrc2, { filename: "present.js" });
+    const P = globalThis.window.SDZPresent;
+
+    // Peer "A" presents a 1-byte image; viewer overlay opens bound to A.
+    P.handleMessage({ kind: "present-start", id: "f1", name: "x.png", type: "image/png", total: 1 }, "A");
+    P.handleMessage({ kind: "present-chunk", id: "f1", seq: 0, data: SDZCrypto.toB64(new Uint8Array([65])) }, "A");
+    P.handleMessage({ kind: "present-end", id: "f1" }, "A");
+    check("viewer overlay opens from presenter A", P.active === true);
+
+    // Foreign peer "B" tries to close A's presentation -> must be IGNORED.
+    P.handleMessage({ kind: "present-close" }, "B");
+    check("present-close from a NON-presenter peer is rejected", P.active === true);
+
+    // The real presenter "A" closes -> must work.
+    P.handleMessage({ kind: "present-close" }, "A");
+    check("present-close from the presenter closes the overlay", P.active === false);
+
+    // A peer "B" cannot hijack a presentation you are watching from "A".
+    P.handleMessage({ kind: "present-start", id: "f2", name: "y.png", type: "image/png", total: 1 }, "A");
+    P.handleMessage({ kind: "present-chunk", id: "f2", seq: 0, data: SDZCrypto.toB64(new Uint8Array([66])) }, "A");
+    P.handleMessage({ kind: "present-end", id: "f2" }, "A");
+    P.handleMessage({ kind: "present-start", id: "f3", name: "evil.png", type: "image/png", total: 1 }, "B");
+    P.handleMessage({ kind: "present-chunk", id: "f3", seq: 0, data: SDZCrypto.toB64(new Uint8Array([67])) }, "B");
+    P.handleMessage({ kind: "present-end", id: "f3" }, "B"); // hijack attempt
+    check("a different peer cannot hijack the overlay you're watching", P.active === true);
+    P.handleMessage({ kind: "present-close" }, "A"); // cleanup
+
+    globalThis.document = savedDoc;
+    globalThis.URL = savedURL;
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

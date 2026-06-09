@@ -56,7 +56,7 @@
     return "other";
   }
 
-  function open({ name, type, url, mode, onControl, ownsUrl }) {
+  function open({ name, type, url, mode, onControl, ownsUrl, presenter }) {
     close();
     const kind = kindOf(name, type);
     let pdfPage = 1;
@@ -159,7 +159,7 @@
     };
     document.addEventListener("keydown", onEsc);
 
-    active = { overlay, url, ownsUrl, applyControl, onEsc, mode };
+    active = { overlay, url, ownsUrl, applyControl, onEsc, mode, presenter: presenter || null };
   }
 
   function close() {
@@ -239,7 +239,7 @@
     return el;
   }
 
-  function openSlides({ slides, mode, startIndex, onControl }) {
+  function openSlides({ slides, mode, startIndex, onControl, presenter }) {
     close();
     let idx = Math.min(Math.max(0, startIndex || 0), slides.length - 1);
 
@@ -316,6 +316,7 @@
       ownsUrl: false,
       onEsc,
       mode,
+      presenter: presenter || null,
       applyPage: (i) => {
         idx = Math.min(Math.max(0, i), slides.length - 1);
         paint();
@@ -350,13 +351,21 @@
     return { ok: true };
   }
 
-  function handleMessage(obj) {
+  // A viewer overlay is bound to the peer who opened it (its presenter).
+  // present-control / present-close / slide-page are honored ONLY from that
+  // peer — any other peer's frame is ignored. This stops an admitted peer from
+  // driving or tearing down a presentation they don't own (SECURITY-AUDIT P1).
+  function fromPresenter(fromPeer) {
+    return !!(active && active.mode === "viewer" && active.presenter === fromPeer);
+  }
+
+  function handleMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return false;
     switch (obj.kind) {
       case "present-start":
         // Don't let a peer's presentation hijack your screen while YOU present.
         if (busyAsPresenter()) return true; // swallow; we hold the slot
-        incoming.set(obj.id, { name: obj.name, type: obj.type, total: obj.total, parts: new Array(obj.total), received: 0 });
+        incoming.set(obj.id, { name: obj.name, type: obj.type, total: obj.total, parts: new Array(obj.total), received: 0, from: fromPeer });
         return true;
       case "present-chunk": {
         const t = incoming.get(obj.id);
@@ -369,24 +378,31 @@
       case "present-end": {
         const t = incoming.get(obj.id);
         if (t) {
+          // Don't open over your own presentation, and don't let a DIFFERENT
+          // peer hijack one you're already watching.
+          if (busyAsPresenter() || (watchingSomeoneElse() && active.presenter !== t.from)) {
+            incoming.delete(obj.id);
+            return true;
+          }
           const blob = reassemble(t.parts, t.type);
-          open({ name: t.name, type: t.type, url: URL.createObjectURL(blob), mode: "viewer", ownsUrl: true });
+          open({ name: t.name, type: t.type, url: URL.createObjectURL(blob), mode: "viewer", ownsUrl: true, presenter: t.from });
           incoming.delete(obj.id);
         }
         return true;
       }
       case "present-control":
-        if (active && active.applyControl) active.applyControl(obj.control);
+        if (fromPresenter(fromPeer) && active.applyControl) active.applyControl(obj.control);
         return true;
       case "present-close":
-        close();
+        if (fromPresenter(fromPeer)) close();
         return true;
       case "slide-show":
         if (busyAsPresenter()) return true; // we hold the slot; ignore peer deck
-        openSlides({ slides: obj.slides || [], mode: "viewer", startIndex: obj.index || 0 });
+        if (watchingSomeoneElse() && active.presenter !== fromPeer) return true; // don't hijack another peer's deck
+        openSlides({ slides: obj.slides || [], mode: "viewer", startIndex: obj.index || 0, presenter: fromPeer });
         return true;
       case "slide-page":
-        if (active && active.applyPage) active.applyPage(obj.index || 0);
+        if (fromPresenter(fromPeer) && active.applyPage) active.applyPage(obj.index || 0);
         return true;
     }
     return false;

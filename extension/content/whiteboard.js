@@ -186,11 +186,19 @@
     overlay ? close() : open(transport);
   }
 
-  function handleMessage(obj) {
+  // Bound memory against a peer flooding wb-stroke frames (SECURITY-AUDIT P1/P2).
+  // A real session stays well under this; a flood just rolls the oldest off.
+  // (The whiteboard is collaborative — no single owner — so strokes/clear are
+  // not sender-bound; making clear owner-only is a product decision, see audit.)
+  const MAX_STROKES = 5000;
+
+  function handleMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return false;
     if (obj.kind === "wb-stroke") {
+      if (!obj.stroke || typeof obj.stroke !== "object") return true; // ignore malformed
       if (!overlay) open(window.SDZTransport); // a member started drawing — show it
       strokes.push(obj.stroke);
+      if (strokes.length > MAX_STROKES) strokes.splice(0, strokes.length - MAX_STROKES);
       drawSeg(obj.stroke);
       return true;
     }
