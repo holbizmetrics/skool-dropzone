@@ -14,7 +14,11 @@
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port: PORT });
+// Bind loopback by default so the dev relay is NOT reachable from the LAN.
+// A bare { port } binds 0.0.0.0 / all interfaces (see SECURITY-AUDIT.md H1).
+// Override with HOST=0.0.0.0 ONLY behind a real room-admission check (production).
+const HOST = process.env.HOST || "127.0.0.1";
+const wss = new WebSocketServer({ port: PORT, host: HOST });
 
 // room -> Map(peerId -> ws)
 const rooms = new Map();
@@ -67,5 +71,5 @@ wss.on("connection", (ws) => {
   });
 });
 
-console.log(`skool-dropzone signaling relay listening on ws://localhost:${PORT}`);
+console.log(`skool-dropzone signaling relay listening on ws://${HOST}:${PORT}`);
 console.log("Relay sees connection metadata only — meeting content is E2EE over the P2P channel.");

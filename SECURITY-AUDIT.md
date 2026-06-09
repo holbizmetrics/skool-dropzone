@@ -29,7 +29,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 
 | # | Finding | Sev | Provenance | Status |
 |---|---------|-----|-----------|--------|
-| H1 | No relay admission control; **relay binds `0.0.0.0` → LAN-reachable** | **HIGH** | primary; reach upgraded by blind-verify | INSPECTION |
+| H1 | No relay admission control; **relay binds `0.0.0.0` → LAN-reachable** | **HIGH** | primary; reach upgraded by blind-verify | LAN-reach FIXED 2026-06-09; admission gap OPEN |
 | P1 | Present/whiteboard control frames accept no sender-binding | **HIGH** | both verifiers converged | INSPECTION |
 | H2 | Convenience mode = obfuscation; privacy promise the user can't verify | **HIGH** | primary; reframed by ADEIS | VERIFIED (mode), REASONED (UX) |
 | P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | INSPECTION |
@@ -53,6 +53,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 - **Impact:** the attacker joins the room as a peer, receives all frames over the established data channels. Convenience mode -> full plaintext read + inject. Passphrase mode -> all ciphertext for offline brute-force of a weak passphrase.
 - **Fix:** `new WebSocketServer({ port, host: "127.0.0.1" })` for dev; for production add a room-join token / membership check. The meeting must stop being the security boundary — the passphrase is.
 - **Note:** the auditor first softened this to "localhost-contained"; blind-verify corrected that (no host binding). The code fact is certain; a live cross-interface connect upgrades it to demonstration-grade.
+- **Resolved (LAN-reach) 2026-06-09:** pre-fix bind demonstrated as `::` (all interfaces); fixed to loopback (`HOST` env, default `127.0.0.1`), real-process bind netstat-confirmed `127.0.0.1:8080`; 12+20 tests green. **This closes the LAN-reach only.** The admission-control gap stays OPEN — any same-host process can still join the room, and production binding a public interface MUST add a room-join token first.
 
 ### P1 [HIGH] Control protocol has no sender-binding (one-line root cause)
 - **Where:** `panel.js:177` receives `onRemoteMessage(obj, fromPeer)` but `:180-181` dispatch to `SDZPresent.handleMessage(obj)` / `SDZWhiteboard.handleMessage(obj)` **without `fromPeer`** — the sender id is thrown away. Same in `harness.js:58-59`. `present.js:356-388` and `whiteboard.js:191-197` apply control frames with no check that the sender is the presentation's opener.
