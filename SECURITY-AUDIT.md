@@ -35,11 +35,11 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 | P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified) |
 | M1 | Malicious-relay handshake MITM (fatal only in convenience mode) | MED | primary | REASONED |
 | M2 | Shared-key group: any member forges/replays (no per-sender identity) | MED | primary | INSPECTION |
-| P3 | Relay: unbounded rooms, client-asserted `peerId`, spoofable `signal.from` | MED | completeness critic | INSPECTION |
-| P4 | Service worker accepts any runtime port; no `port.sender` check / socket cap | MED | completeness critic | INSPECTION |
-| P5 | Manifest: dead `host_permissions`, no CSP, hardcoded cleartext `ws://` | MED | completeness critic | INSPECTION |
+| P3 | Relay: unbounded rooms, client-asserted `peerId`, spoofable `signal.from` | MED | completeness critic | FIXED 2026-06-09 (behavior-verified) |
+| P4 | Service worker accepts any runtime port; no `port.sender` check / socket cap | MED | completeness critic | FIXED 2026-06-09 (SW browser-retest owed) |
+| P5 | Manifest: dead `host_permissions`, no CSP, hardcoded cleartext `ws://` | MED | completeness critic | PARTIAL 2026-06-09 (CSP added; host_perm trim deferred) |
 | L1 | Deterministic salt -> precomputation (FORCED by no-key-exchange design) | LOW | primary | VERIFIED |
-| P6 | Peer-set blob MIME -> download-then-open renders as HTML | LOW-MED | completeness critic | INSPECTION |
+| P6 | Peer-set blob MIME -> download-then-open renders as HTML | LOW-MED | completeness critic | FIXED 2026-06-09 (in-app vector; download residual LOW) |
 | P7 | ~~No `package-lock.json`~~ — **FALSE FINDING** (lockfile present since `aa9c4fe`) | LOW | completeness critic (ungrounded absence) | REFUTED 2026-06-09 |
 | L2 | AES-GCM IV — fresh per message, fine at meeting volumes | CLEAR | primary | VERIFIED |
 
@@ -86,19 +86,23 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 
 ### P3 [MED] Relay process hardening (availability)
 - **Where:** `server.js:20` (`rooms` grows unbounded — no cap on rooms or peers/room); `:40,:50` (`peerId` client-asserted, no uniqueness — a duplicate `peerId` overwrites the map entry and silently de-routes the original peer); `:52-56` (`signal` carries a sender-claimed `from` -> signaling-layer impersonation, pre-E2EE DoS). **Fix:** cap rooms/peers-per-room, reject duplicate `peerId`, validate `to` is a known distinct peer, per-connection rate limit.
+- **Resolved 2026-06-09:** caps rooms (`MAX_ROOMS`) + peers/room (`MAX_PEERS_PER_ROOM`, env-overridable), one-join-per-connection, and **refuses a duplicate `peerId`** with `join-error` instead of overwriting (the de-route primitive); `signal` requires the sender be joined and won't echo to self; `maxPayload: 256KB`. Note: `from` is the server-side joined id (not client-supplied) so it was **not** per-message spoofable as worded — the real risk was the dup-`peerId` overwrite, now closed. Behaviorally verified against the real relay (`node-verify-signaling.js`: dup rejected, original keeps routing). Not added: per-connection rate-limiting (deferred; `maxPayload` + caps cover the main DoS).
 
 ### P4 [MED] Service worker port trust
 - **Where:** `service-worker.js:36-37` accepts any `chrome.runtime.connect({name:"sdz-signaling"})` with no `port.sender` check and opens a real relay socket per port; no concurrent-socket cap (`:67`); `:79-87` forwards every relay frame to the content port unvalidated.
 - **Mitigating fact (positive):** `externally_connectable` is **absent**, so random skool.com page scripts cannot reach the SW — the gap is contained to in-extension callers. **Fix:** validate `port.sender.id === chrome.runtime.id`; cap sockets per sender.
+- **Resolved 2026-06-09:** SW rejects ports whose `port.sender.id` isn't our own extension id (fail-open only when `sender.id` is absent) and caps concurrent sockets (`MAX_SOCKETS = 8`). Static-verified; the SW runtime path needs a **browser retest** to confirm legit content-script ports still connect.
 
 ### P5 [MED] Manifest / MV3 gaps
 - **Where:** `manifest.json` — no `content_security_policy` (declare `script-src 'self'`); `host_permissions: [http/https://localhost/*]` is **dead scope** (the SW uses `new WebSocket("ws://localhost:8080")`, not gated by host_permissions) — broadens the install warning for nothing; hardcoded cleartext `ws://localhost:8080` (`service-worker.js:15`) is a **ship-blocker for any non-localhost deployment** (must be `wss://`). `web_accessible_resources` absent = good.
+- **Resolved (partial) 2026-06-09:** explicit `content_security_policy.extension_pages = "script-src 'self'; object-src 'self'"` added (belt-and-suspenders over the MV3 default). **Deferred (needs browser verification):** the `host_permissions` trim and the production `wss://` move — removing the localhost host-permission could affect the working signaling socket, so per the **P7 lesson** it is NOT changed on the verifier's unverified "dead scope" claim without a browser retest.
 
 ### L1 [LOW] Deterministic salt
 - **Where:** `crypto.js:56`, salt = `"skool-dropzone:" + meetingId`, no random component. Enables precomputation against a known meeting id + weak passphrase; **FORCED** by the derive-independently/no-key-exchange design (peers can't agree a random salt without a key exchange). Mitigated by 250k PBKDF2 iterations + strong passphrases. Real fix is a group key-agreement (architectural, not a Phase-8 patch).
 
 ### P6 [LOW-MED] Peer-set blob MIME
 - **Where:** peer-controlled file names flow to `dl.download = item.name` (`panel.js:471`) and blob `type` to `new Blob([...], {type})` (`panel.js:247`, `present.js:48,373`). A peer-set `text/html` MIME + `URL.createObjectURL` means a downloaded, then-opened file renders as HTML in the blob context. Social-engineered (requires download + open), not auto-exec. **Fix:** allowlist non-executable blob `type`; sanitize the download extension.
+- **Resolved 2026-06-09:** both receive paths coerce the peer-controlled MIME through a `safeMime()` allowlist (raster image / video / audio / pdf only; `text/html`, `image/svg+xml`, and unknowns -> `application/octet-stream`) before constructing the Blob — neutralizing the in-app vector (a `text/html` present lands as an inert iframe download, not rendered HTML). `safeMime` logic unit-tested. **Residual (LOW):** the *download-then-open* path keeps the original filename, so a manually downloaded-and-opened `.html` still renders — sanitizing the download filename would rename user files and is left as a product call.
 
 ### P7 [LOW] Supply chain
 - **Where:** `signaling/package.json:11` pins `ws: ^8.18.0`. The declared floor is **past** the CVE-2024-37890 fix (8.17.1), so the version itself is clean — but there is **no `package-lock.json`**, so `^8.18.0` floats at install time with no integrity pinning. **Fix:** commit a lockfile. ([CVE-2024-37890 / Snyk SNYK-JS-WS-7266574])

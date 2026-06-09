@@ -21,6 +21,13 @@
   let active = null; // { overlay, url, ownsUrl, applyControl, applyPage, mode }
   const incoming = new Map(); // id -> { name, type, total, parts[], received }
   const MAX_CHUNKS = 32 * 1024; // receive-side total guard (~512MB) — rejects a pathological present-start total (SECURITY-AUDIT P2)
+  // Peer-controlled MIME is coerced to a non-executable allowlist so a presented
+  // blob can't render as HTML in the viewer iframe (SECURITY-AUDIT P6).
+  const SAFE_MIME = /^(image\/(png|jpe?g|gif|webp|bmp)|video\/(mp4|webm|ogg)|audio\/(mpeg|mp4|ogg|wav|webm)|application\/pdf)$/;
+  function safeMime(t) {
+    t = String(t || "").toLowerCase().split(";")[0].trim();
+    return SAFE_MIME.test(t) ? t : "application/octet-stream";
+  }
 
   // Presenter slot guard (Phase 8 hardening of the Phase 5 "last Present wins"
   // limit). We hold a soft lock for the two common races:
@@ -46,7 +53,7 @@
       all.set(b, off);
       off += b.length;
     });
-    return new Blob([all], { type: type || "application/octet-stream" });
+    return new Blob([all], { type: safeMime(type) });
   }
 
   function kindOf(name, type) {

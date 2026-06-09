@@ -11,6 +11,14 @@
 
   const MAX_FILE = 50 * 1024 * 1024; // 50 MB cap for Phase 4
   const MAX_CHUNKS = Math.ceil(MAX_FILE / (16 * 1024)) + 2; // receive-side total guard (SECURITY-AUDIT P2)
+  // Peer-controlled MIME is coerced to a non-executable allowlist so a received
+  // blob can't render as HTML if opened (SECURITY-AUDIT P6). Anything not on the
+  // list (e.g. text/html, image/svg+xml) becomes an inert download.
+  const SAFE_MIME = /^(image\/(png|jpe?g|gif|webp|bmp)|video\/(mp4|webm|ogg)|audio\/(mpeg|mp4|ogg|wav|webm)|application\/pdf)$/;
+  function safeMime(t) {
+    t = String(t || "").toLowerCase().split(";")[0].trim();
+    return SAFE_MIME.test(t) ? t : "application/octet-stream";
+  }
 
   let isOpen = false;
   let inCall = false;
@@ -249,7 +257,7 @@
       all.set(p, off);
       off += p.length;
     });
-    const blob = new Blob([all], { type: t.type || "application/octet-stream" });
+    const blob = new Blob([all], { type: safeMime(t.type) });
     finalizeFileMessage(t.domId, { name: t.name, size: t.size, type: t.type }, URL.createObjectURL(blob), false);
     incoming.delete(obj.id);
   }

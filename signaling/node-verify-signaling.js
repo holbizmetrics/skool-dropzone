@@ -112,6 +112,29 @@ function client(peerId) {
     check("alice notified carol left (peer-left)", a.seen((m) => m.type === "peer-left" && m.peerId === "carol"));
     check("bob notified carol left", b.seen((m) => m.type === "peer-left" && m.peerId === "carol"));
 
+    console.log("\nP3 relay hardening (duplicate peerId rejected, original keeps routing):");
+    const e1 = client("eve");
+    await e1.ready;
+    e1.join("room-3");
+    await sleep(100);
+    const e2 = client("eve"); // same peerId, different socket
+    await e2.ready;
+    e2.join("room-3");
+    await sleep(100);
+    check("duplicate peerId join is rejected (join-error)", e2.seen((m) => m.type === "join-error" && /in use/.test(m.reason)));
+    const frank = client("frank");
+    await frank.ready;
+    frank.join("room-3");
+    await sleep(100);
+    e1.inbox.length = 0;
+    frank.signal("eve", { sdp: { type: "offer", sdp: "ROUTE_OK" } });
+    await sleep(100);
+    check("original peerId holder still receives signals after a dup attempt", e1.seen((m) => m.type === "signal" && m.from === "frank"));
+    e1.close();
+    e2.close();
+    frank.close();
+    await sleep(100);
+
     a.close();
     b.close();
     d.close();

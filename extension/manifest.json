@@ -7,6 +7,9 @@
     "service_worker": "background/service-worker.js"
   },
   "host_permissions": ["http://localhost/*", "https://localhost/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],

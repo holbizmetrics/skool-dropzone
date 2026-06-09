@@ -13,6 +13,7 @@
 // timer) plus an app-level WS ping so the connection stays warm.
 
 const SIGNALING_URL = "ws://localhost:8080";
+const MAX_SOCKETS = 8; // cap concurrent signaling sockets (SECURITY-AUDIT P4)
 
 let openSockets = 0;
 let keepAliveTimer = null;
@@ -35,6 +36,10 @@ function maybeStopKeepAlive() {
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "sdz-signaling") return;
+  // Only accept ports from our own extension contexts (SECURITY-AUDIT P4).
+  // (externally_connectable is absent, so web pages already can't reach us;
+  // this is defense-in-depth against any in-extension caller.)
+  if (port.sender && port.sender.id && port.sender.id !== chrome.runtime.id) return;
 
   let ws = null;
   let queue = [];
@@ -56,6 +61,10 @@ chrome.runtime.onConnect.addListener((port) => {
 
   port.onMessage.addListener((msg) => {
     if (msg.type === "connect") {
+      if (openSockets >= MAX_SOCKETS) {
+        port.postMessage({ type: "ws-error", error: "too many signaling sockets" });
+        return;
+      }
       try {
         ws = new WebSocket(SIGNALING_URL);
       } catch (e) {

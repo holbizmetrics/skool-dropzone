@@ -269,6 +269,31 @@ function bytesEqual(a, b) {
     globalThis.URL = sURL;
   }
 
+  console.log("\nSECURITY-AUDIT P4/P5/P6 — service worker, manifest CSP, blob-MIME:");
+  {
+    const swSrc = fs.readFileSync(path.join(__dirname, "..", "background", "service-worker.js"), "utf8");
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const presentSrc = fs.readFileSync(path.join(__dirname, "..", "content", "present.js"), "utf8");
+    // P4
+    check("SW rejects ports from a foreign extension id", /port\.sender\.id !== chrome\.runtime\.id/.test(swSrc));
+    check("SW caps concurrent signaling sockets", /openSockets >= MAX_SOCKETS/.test(swSrc));
+    // P5
+    check("manifest declares a content_security_policy", !!(manifest.content_security_policy && manifest.content_security_policy.extension_pages));
+    check("manifest CSP restricts script-src to self", /script-src 'self'/.test((manifest.content_security_policy || {}).extension_pages || ""));
+    // P6 wiring
+    check("panel.js sanitizes blob MIME (safeMime)", /new Blob\(\[all\], \{ type: safeMime/.test(panelSrc));
+    check("present.js sanitizes blob MIME (safeMime)", /type: safeMime\(type\)/.test(presentSrc));
+    // P6 logic — replicate the shared allowlist (kept in lockstep with the source)
+    const SAFE_MIME = /^(image\/(png|jpe?g|gif|webp|bmp)|video\/(mp4|webm|ogg)|audio\/(mpeg|mp4|ogg|wav|webm)|application\/pdf)$/;
+    const safeMime = (t) => { t = String(t || "").toLowerCase().split(";")[0].trim(); return SAFE_MIME.test(t) ? t : "application/octet-stream"; };
+    check("safeMime: text/html -> octet-stream", safeMime("text/html") === "application/octet-stream");
+    check("safeMime: image/svg+xml -> octet-stream (svg can script)", safeMime("image/svg+xml") === "application/octet-stream");
+    check("safeMime: image/png preserved", safeMime("image/png") === "image/png");
+    check("safeMime: application/pdf preserved", safeMime("application/pdf") === "application/pdf");
+    check("safeMime: video/mp4 preserved", safeMime("video/mp4") === "video/mp4");
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

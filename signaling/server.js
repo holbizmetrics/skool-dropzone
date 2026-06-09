@@ -18,7 +18,11 @@ const PORT = process.env.PORT || 8080;
 // A bare { port } binds 0.0.0.0 / all interfaces (see SECURITY-AUDIT.md H1).
 // Override with HOST=0.0.0.0 ONLY behind a real room-admission check (production).
 const HOST = process.env.HOST || "127.0.0.1";
-const wss = new WebSocketServer({ port: PORT, host: HOST });
+// Relay hardening (SECURITY-AUDIT P3): bound resource use + reject impersonation.
+const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 500;
+const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS) || 50;
+const MAX_ID_LEN = 200;
+const wss = new WebSocketServer({ port: PORT, host: HOST, maxPayload: 256 * 1024 });
 
 // room -> Map(peerId -> ws)
 const rooms = new Map();
@@ -30,6 +34,7 @@ function send(ws, obj) {
 wss.on("connection", (ws) => {
   let room = null;
   let peerId = null;
+  let joined = false;
 
   ws.on("message", (raw) => {
     let msg;
@@ -40,11 +45,29 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "join") {
-      room = String(msg.room || "unknown");
-      peerId = String(msg.peerId || "");
-      if (!peerId) return;
-      if (!rooms.has(room)) rooms.set(room, new Map());
-      const peers = rooms.get(room);
+      if (joined) return; // one join per connection
+      const r = String(msg.room || "unknown").slice(0, MAX_ID_LEN);
+      const pid = String(msg.peerId || "").slice(0, MAX_ID_LEN);
+      if (!pid) return;
+      if (!rooms.has(r) && rooms.size >= MAX_ROOMS) {
+        send(ws, { type: "join-error", reason: "too many rooms" });
+        return;
+      }
+      if (!rooms.has(r)) rooms.set(r, new Map());
+      const peers = rooms.get(r);
+      if (peers.has(pid)) {
+        // Don't overwrite an existing peer's socket — overwriting de-routes the
+        // original peer and is a targeted-hijack primitive (SECURITY-AUDIT P3).
+        send(ws, { type: "join-error", reason: "peerId in use" });
+        return;
+      }
+      if (peers.size >= MAX_PEERS_PER_ROOM) {
+        send(ws, { type: "join-error", reason: "room full" });
+        return;
+      }
+      room = r;
+      peerId = pid;
+      joined = true;
 
       // Tell the joiner who's already here (joiner initiates to each).
       send(ws, { type: "peers", peers: [...peers.keys()] });
@@ -54,15 +77,16 @@ wss.on("connection", (ws) => {
       peers.set(peerId, ws);
       console.log(`[join]  room=${room} peer=${peerId} total=${peers.size}`);
     } else if (msg.type === "signal") {
-      // Relay an SDP/ICE blob to a specific peer in the same room.
-      if (!room || !rooms.has(room)) return;
+      // Relay an SDP/ICE blob to a specific peer in the same room. `from` is the
+      // sender's server-side joined id (not client-supplied) so it can't be spoofed.
+      if (!joined || !rooms.has(room)) return;
       const target = rooms.get(room).get(msg.to);
-      if (target) send(target, { type: "signal", from: peerId, data: msg.data });
+      if (target && target !== ws) send(target, { type: "signal", from: peerId, data: msg.data });
     }
   });
 
   ws.on("close", () => {
-    if (!room || !rooms.has(room)) return;
+    if (!joined || !rooms.has(room)) return;
     const peers = rooms.get(room);
     peers.delete(peerId);
     for (const [, peerWs] of peers) send(peerWs, { type: "peer-left", peerId });
