@@ -25,6 +25,7 @@
   let userToggled = false;
   let connected = false; // joined the E2EE room
   let convenienceMode = false; // joined with empty passphrase
+  let convenienceConfirmed = false; // user explicitly accepted the no-passphrase exposure (H2)
   let lastPeers = 0; // for presence (join/leave) detection
   const messages = [];
   const staged = new Map();
@@ -70,7 +71,7 @@
       </header>
 
       <div class="sdz-connect">
-        <input class="sdz-pass" type="text" placeholder="Room passphrase (leave blank = convenience mode)" autocomplete="off" />
+        <input class="sdz-pass" type="text" placeholder="Room passphrase (recommended — blank = host can read)" autocomplete="off" />
         <button class="sdz-join" type="button">Join room</button>
       </div>
       <div class="sdz-status" data-mode="offline">Not connected — join the room to chat with other members.</div>
@@ -129,6 +130,20 @@
     if (connected) return;
     const passInput = document.querySelector(`#${PANEL_ID} .sdz-pass`);
     const passphrase = passInput ? passInput.value : "";
+
+    // H2: a blank passphrase is convenience mode — the meeting host (and anyone
+    // with the link) can read the traffic. Don't let a user land there silently;
+    // require one explicit confirm before joining without a passphrase.
+    if (!passphrase && !convenienceConfirmed) {
+      convenienceConfirmed = true;
+      const joinBtn = document.querySelector(`#${PANEL_ID} .sdz-join`);
+      if (joinBtn) joinBtn.textContent = "Join without a passphrase";
+      setStatus(
+        "error",
+        "No passphrase: the meeting host (and anyone with the link) can read these messages. Add a passphrase for end-to-end privacy, or click Join again to continue anyway."
+      );
+      return;
+    }
     convenienceMode = !passphrase;
 
     if (!window.SDZTransport) {

@@ -294,6 +294,13 @@ function bytesEqual(a, b) {
     check("safeMime: video/mp4 preserved", safeMime("video/mp4") === "video/mp4");
   }
 
+  console.log("\nSECURITY-AUDIT H2 — convenience-mode confirm (UX; browser-retest owed):");
+  {
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    check("blank Join requires an explicit convenience confirm", /!passphrase && !convenienceConfirmed/.test(panelSrc));
+    check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

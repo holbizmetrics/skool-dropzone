@@ -31,7 +31,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 |---|---------|-----|-----------|--------|
 | H1 | No relay admission control; **relay binds `0.0.0.0` → LAN-reachable** | **HIGH** | primary; reach upgraded by blind-verify | LAN-reach FIXED 2026-06-09; admission gap OPEN |
 | P1 | Present/whiteboard control frames accept no sender-binding | **HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified; browser UX owed) |
-| H2 | Convenience mode = obfuscation; privacy promise the user can't verify | **HIGH** | primary; reframed by ADEIS | VERIFIED (mode), REASONED (UX) |
+| H2 | Convenience mode = obfuscation; privacy promise the user can't verify | **HIGH** | primary; reframed by ADEIS | MITIGATED 2026-06-09 (blank-Join confirm; fully-mandatory = open product call) |
 | P2 | Receiver trusts `obj.total`/`obj.seq` off the wire -> one-frame OOM | **MED-HIGH** | both verifiers converged | FIXED 2026-06-09 (behavior-verified) |
 | M1 | Malicious-relay handshake MITM (fatal only in convenience mode) | MED | primary | REASONED |
 | M2 | Shared-key group: any member forges/replays (no per-sender identity) | MED | primary | INSPECTION |
@@ -68,6 +68,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 - **Impact (crypto):** against the relay/host, convenience mode provides no confidentiality (see Claim A). VERIFIED by inspection of the deterministic derivation.
 - **Impact (UX / ADEIS, see below):** the product presents an "encrypted" affordance that a non-technical user cannot tell is unmet in the default (blank) path. The harm is false confidence, not just a weak mode.
 - **Fix (product decision — owner's call):** gate the lock affordance behind a real passphrase; add a point-of-decision warning on blank Join ("No passphrase = the meeting host can read this. Add one / Continue"); never show E2EE semantics in convenience mode.
+- **Mitigated (additive) 2026-06-09:** blank-passphrase **Join** now requires one explicit confirm — first click shows "No passphrase: the meeting host (and anyone with the link) can read these messages…" and relabels the button to "Join without a passphrase"; a second click proceeds. Placeholder copy changed from "leave blank = convenience mode" to "recommended — blank = host can read". Convenience mode is **kept** (operator's deliberate feature), just no longer silent. Static-contract checked; the UX itself is **browser-retest owed**. Still open (operator's call): fully *mandatory* passphrase / removing convenience mode entirely.
 
 ### P2 [MED-HIGH] Receiver trusts attacker-controlled length fields
 - **Where:** `panel.js:211` and `present.js:359` do `new Array(obj.total)` on a self-asserted count; chunk writes `t.parts[obj.seq]` (`panel.js:228`, `present.js:363`) with no bound on `seq`. The only size guard (`panel.js:204`, `obj.size > MAX_FILE`) is on a self-asserted field and is not enforced against actual bytes received.
