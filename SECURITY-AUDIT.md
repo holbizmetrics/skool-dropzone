@@ -40,7 +40,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 | P5 | Manifest: dead `host_permissions`, no CSP, hardcoded cleartext `ws://` | MED | completeness critic | INSPECTION |
 | L1 | Deterministic salt -> precomputation (FORCED by no-key-exchange design) | LOW | primary | VERIFIED |
 | P6 | Peer-set blob MIME -> download-then-open renders as HTML | LOW-MED | completeness critic | INSPECTION |
-| P7 | No `package-lock.json` (`ws ^8.18.0` floats; declared ver past CVE-2024-37890) | LOW | completeness critic | FIXED 2026-06-09 (lockfile, ws 8.20.1) |
+| P7 | ~~No `package-lock.json`~~ — **FALSE FINDING** (lockfile present since `aa9c4fe`) | LOW | completeness critic (ungrounded absence) | REFUTED 2026-06-09 |
 | L2 | AES-GCM IV — fresh per message, fine at meeting volumes | CLEAR | primary | VERIFIED |
 
 ---
@@ -102,7 +102,7 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 
 ### P7 [LOW] Supply chain
 - **Where:** `signaling/package.json:11` pins `ws: ^8.18.0`. The declared floor is **past** the CVE-2024-37890 fix (8.17.1), so the version itself is clean — but there is **no `package-lock.json`**, so `^8.18.0` floats at install time with no integrity pinning. **Fix:** commit a lockfile. ([CVE-2024-37890 / Snyk SNYK-JS-WS-7266574])
-- **Resolved 2026-06-09:** `package-lock.json` generated (`npm install --package-lock-only`); `ws` pinned at **8.20.1** (past the 8.17.1 CVE fix). Integrity now locked at install time.
+- **REFUTED 2026-06-09 (false finding):** `package-lock.json` has existed since commit `aa9c4fe` (2026-05-20), pinning `ws` **8.20.1** with integrity present (verified via `git cat-file -p HEAD:signaling/package-lock.json`). The completeness-critic's "glob found none" was an **ungrounded absence claim** — the file was tracked in git all along. No fix was needed; `npm install --package-lock-only` this session produced no diff, confirming. Lesson (logged): the absence claim was acted on before being re-grounded from a fixed vantage — the exact failure class the kernel's grounding discipline guards against; even a spawned blind verifier's negative claim must be verified before action.
 
 ### L2 [CLEAR] AES-GCM IV — verified fine
 - `crypto.js:69` uses `crypto.getRandomValues(new Uint8Array(12))` fresh per `encrypt`, including per file chunk. Random 96-bit IV collision risk is negligible at meeting volumes. No action.
