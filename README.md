@@ -76,6 +76,41 @@ Remaining roadmap: PPT/Keynote import (Phase 7 stretch), Phase 8 security audit,
 - Detection: which Skool URL patterns count as "in a meeting"
 - Auth: link-as-token is the design; does Skool's meeting URL stay stable enough across the meeting to use it that way
 
+## Development
+
+The extension is zero-dependency vanilla JS — no build step. The only npm
+dependency is `ws`, used by the signaling relay and its test rig.
+
+One-time setup (for the signaling tests):
+
+```bash
+cd signaling && npm ci && cd ..
+```
+
+Run the tests (syntax gate + unit suites):
+
+```bash
+npm test                 # syntax check, then extension + signaling suites
+npm run check            # syntax gate only (node --check on every .js)
+npm run test:extension   # crypto, file-chunking, present sender-binding, blob-MIME
+npm run test:signaling   # real relay: room routing, isolation, P3 hardening
+```
+
+The suites cover pure logic and stubbed-behavioral paths (AES-GCM round-trip,
+chunk reassembly, control-frame sender-binding, receiver clamps, relay routing).
+They do **not** exercise WebRTC, the DOM, or the MV3 service-worker runtime —
+that stays the two-tab browser test (`extension/test/harness.html`, or load the
+unpacked extension).
+
+**CI** — `.github/workflows/ci.yml` runs `npm test` on every push and PR.
+
+**Release** — push a tag `sdz-v<version>` (e.g. `sdz-v0.7.0`):
+`.github/workflows/release.yml` runs the tests, packages `extension/` into a
+versioned zip, and attaches it to a GitHub Release. It does not auto-publish to
+the Chrome Web Store (that's Phase 9).
+
+See [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md) for the Phase-8 review these tests guard.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).

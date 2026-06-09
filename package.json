@@ -1,0 +1,14 @@
+{
+  "name": "skool-dropzone",
+  "version": "0.7.0",
+  "private": true,
+  "description": "Member-side companion for Skool meetings — E2EE chat/files/presentation. This root package is the test + CI orchestrator; the extension itself is zero-dependency vanilla JS.",
+  "license": "MIT",
+  "scripts": {
+    "check": "node scripts/syntax-check.js",
+    "pretest": "npm run check",
+    "test": "npm run test:extension && npm run test:signaling",
+    "test:extension": "node extension/test/node-verify.js",
+    "test:signaling": "node signaling/node-verify-signaling.js"
+  }
+}

@@ -1,0 +1,45 @@
+name: Release
+
+# Tag-triggered packaging, mirroring the BrowserExtensions `clo-v*` pattern.
+# Push a tag like `sdz-v0.7.0` to build a versioned, load-unpacked-ready zip of
+# the extension and attach it to a GitHub Release. Tests gate the release.
+#
+# This packages an UNPACKED extension zip for sideloading / manual Web Store
+# upload. It does NOT auto-publish to the Chrome Web Store (that's Phase 9).
+
+on:
+  push:
+    tags:
+      - 'sdz-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install signaling deps
+        run: npm ci
+        working-directory: signaling
+
+      - name: Test before release
+        run: npm test
+
+      - name: Package extension
+        run: |
+          mkdir -p dist
+          ( cd extension && zip -r "../dist/skool-dropzone-${GITHUB_REF_NAME}.zip" . -x '*/node_modules/*' '*/.DS_Store' )
+          ls -la dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/skool-dropzone-*.zip
+          generate_release_notes: true

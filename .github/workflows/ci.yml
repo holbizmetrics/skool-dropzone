@@ -1,0 +1,31 @@
+name: CI
+
+# Runs the syntax gate + unit suites on every push and PR. This is what keeps
+# the Phase-8 security fixes from silently regressing (see SECURITY-AUDIT.md).
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The extension is zero-dependency; only the signaling relay + its test
+      # rig need `ws`. Install from the committed lockfile.
+      - name: Install signaling deps
+        run: npm ci
+        working-directory: signaling
+
+      # `npm test` runs `pretest` (syntax gate) then the extension + signaling
+      # suites. node:crypto.subtle, the DOM-stubbed behavioral tests, and the
+      # real-relay signaling tests all run headless on Linux.
+      - name: Test (syntax + unit + signaling)
+        run: npm test
