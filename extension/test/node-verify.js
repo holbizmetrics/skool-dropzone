@@ -301,6 +301,16 @@ function bytesEqual(a, b) {
     check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
   }
 
+  console.log("\nSECURITY-AUDIT H1 — admission handshake (transport; browser-retest owed):");
+  {
+    const transportSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transport.js"), "utf8");
+    check("peers carry an authed flag", /authed: false/.test(transportSrc));
+    check("a key-proof hello is sent on channel open", /__sdz-hello/.test(transportSrc));
+    check("successful decrypt admits the peer", /entry\.authed = true/.test(transportSrc));
+    check("content send is gated on peer auth", /e\.authed && e\.dc/.test(transportSrc));
+    check("unproven peers dropped after a timeout", /AUTH_TIMEOUT_MS/.test(transportSrc) && /removePeer\(remoteId\)/.test(transportSrc));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

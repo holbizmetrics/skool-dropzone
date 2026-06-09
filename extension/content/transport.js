@@ -13,6 +13,12 @@
   // (Production over the internet will add a STUN server here.)
   const RTC_CONFIG = { iceServers: [] };
 
+  // Admission handshake (SECURITY-AUDIT H1): a peer must prove it holds the room
+  // key (by sending a frame we can decrypt) within this window, or we drop it
+  // from the mesh. Until proven, we send it no app content. This makes the
+  // passphrase an ADMISSION boundary, not just a confidentiality layer.
+  const AUTH_TIMEOUT_MS = 8000;
+
   const peerId =
     (crypto.randomUUID && crypto.randomUUID()) ||
     "p" + Math.random().toString(36).slice(2);
@@ -80,7 +86,7 @@
   function createPeer(remoteId, initiator) {
     if (peers.has(remoteId)) return peers.get(remoteId);
     const pc = new RTCPeerConnection(RTC_CONFIG);
-    const entry = { pc, dc: null };
+    const entry = { pc, dc: null, authed: false, authTimer: null };
     peers.set(remoteId, entry);
 
     pc.onicecandidate = (e) => {
@@ -108,20 +114,57 @@
   function setupDataChannel(remoteId, dc) {
     const entry = peers.get(remoteId);
     if (entry) entry.dc = dc;
-    dc.onopen = () => emitStatus({ state: "connected" });
+    dc.onopen = () => {
+      // Prove WE hold the key (the peer admits us on its side), and start the
+      // clock for the peer to prove the same. Do NOT emit "connected" yet — that
+      // waits until the peer is admitted.
+      sendRaw(dc, { kind: "__sdz-hello" });
+      if (entry) {
+        entry.authTimer = setTimeout(() => {
+          if (!entry.authed) {
+            console.warn("[SDZTransport] peer failed key-proof in time; dropping", remoteId);
+            removePeer(remoteId);
+          }
+        }, AUTH_TIMEOUT_MS);
+      }
+    };
     dc.onclose = () => emitStatus({});
     dc.onmessage = async (e) => {
       try {
         const payload = JSON.parse(e.data);
         const text = await window.SDZCrypto.decryptText(key, payload);
         const obj = JSON.parse(text);
+        // A successful decrypt proves this peer holds the room key — admit it.
+        if (entry && !entry.authed) {
+          entry.authed = true;
+          if (entry.authTimer) {
+            clearTimeout(entry.authTimer);
+            entry.authTimer = null;
+          }
+          emitStatus({ state: "connected" });
+        }
+        if (obj && obj.kind === "__sdz-hello") return; // admission frame, not app content
         onMessageCb && onMessageCb(obj, remoteId);
       } catch (err) {
-        // Most common cause: peers used different passphrases.
+        // Undecryptable -> the peer does NOT prove the key; it is never admitted
+        // and the auth timer will drop it. Benign cause: passphrase mismatch.
         console.warn("[SDZTransport] could not decrypt message (passphrase mismatch?)", err);
         onMessageCb && onMessageCb({ kind: "undecryptable" }, remoteId);
       }
     };
+  }
+
+  // Encrypt + send one frame straight to a channel, bypassing the authed gate.
+  // Used only for the admission hello — a peer can't be authed before it proves
+  // the key, so the hello itself must not be gated on auth.
+  async function sendRaw(dc, obj) {
+    if (!key || !dc || dc.readyState !== "open") return;
+    try {
+      const payload = await window.SDZCrypto.encrypt(key, JSON.stringify(obj));
+      dc.send(JSON.stringify(payload));
+    } catch (err) {
+      console.error("[SDZTransport] hello send failed:", err);
+    }
   }
 
   async function onRemoteSignal(remoteId, data) {
@@ -151,6 +194,10 @@
   function removePeer(remoteId) {
     const entry = peers.get(remoteId);
     if (entry) {
+      if (entry.authTimer) {
+        clearTimeout(entry.authTimer);
+        entry.authTimer = null;
+      }
       try {
         entry.pc.close();
       } catch {}
@@ -162,7 +209,8 @@
   function connectedCount() {
     let n = 0;
     peers.forEach((e) => {
-      if (e.dc && e.dc.readyState === "open") n++;
+      // Count only admitted peers — a connected-but-unproven peer isn't "in".
+      if (e.authed && e.dc && e.dc.readyState === "open") n++;
     });
     return n;
   }
@@ -176,7 +224,8 @@
     const payload = await window.SDZCrypto.encrypt(key, JSON.stringify(obj));
     const wire = JSON.stringify(payload);
     peers.forEach((e) => {
-      if (e.dc && e.dc.readyState === "open") e.dc.send(wire);
+      // Only send app content to peers that have proven the room key (H1).
+      if (e.authed && e.dc && e.dc.readyState === "open") e.dc.send(wire);
     });
   }
 
