@@ -184,16 +184,27 @@ Phased so each step is testable on its own and builds toward the killer feature 
 
 ---
 
-## Phase 8 — Polish + security audit
+## Phase 8 — Polish + security audit — **IN PROGRESS**
 
-- Key rotation (per-meeting keys, no persistence across meetings)
-- Cross-meeting isolation tests (knowing meeting A's link must give zero access to meeting B)
-- Replay-after-meeting test (does the link still work tomorrow? should it?)
-- File-size + rate limits
-- Error states (peer dropped, signaling relay down, key wrong)
-- Performance: 8-person room with whiteboard + PDF + chat — does it hold up?
+**Security audit landed 2026-06-09 → [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md).** Adversarial review (PARALLAX + two blind verifiers + TRIAD/ADEIS) of the crypto + isolation core. Headline: cross-meeting isolation holds; "no third-party read" is real **with a passphrase**, weak in convenience mode (now flagged in the UI). The scariest hypothetical — stored XSS over the E2EE channel — was checked and does **not** exist.
 
-**Done when:** a friendly security-aware person can't break it with the obvious attacks.
+Original checklist, current status:
+
+- Key rotation (per-meeting keys, no persistence) — **open**
+- Cross-meeting isolation (link to A gives zero access to B) — **done** (verified; relay room-isolation tested in `node-verify-signaling.js`)
+- Replay-after-meeting test — **open**
+- File-size + rate limits — **partial** (receiver `total`/`seq` clamps + relay room/peer caps + `maxPayload` landed; per-connection rate-limit deferred)
+- Error states (peer dropped, relay down, key wrong) — **partial** (blank-passphrase confirm + relay-down message; full peer-drop UX owed)
+- Performance: 8-person room — **open** (needs the browser pass)
+
+Fixes **on master** (CI-green, behaviorally verified where Node allows): relay binds loopback (H1 LAN-reach), present/whiteboard sender-binding (P1), receiver clamps (P2), relay hardening (P3), service-worker port check (P4), CSP (P5 partial), blob-MIME allowlist (P6), convenience-mode confirm (H2). Plus **test + CI + release infra** (early Phase-9 groundwork): `npm test` (syntax gate + 50 extension + 14 signaling checks), GitHub Actions CI on every push, `sdz-v*` tag → packaged release.
+
+**Done when:** a friendly security-aware person can't break it with the obvious attacks. **Not yet** — the two in-flight branches need the browser test, and screen-share needs rework (below).
+
+### In flight (branches — NOT on master, NOT merged)
+
+- **`feat/h1-admission-handshake`** — key-knowledge admission gate: a wrong/absent-passphrase peer is dropped from the mesh instead of silently receiving ciphertext. Built, CI-green on contract checks; **owed the two-tab browser test** before merge.
+- **`feat/screen-share`** — member-side P2P **live screen share** (screen only, no webcam — Skool already provides webcam). Drafted + audited; **found broken**: renegotiation glare-deadlocks for 3+ peers, and a forced-fullscreen abuse with no consent/slot gate (the present.js guards weren't carried over). Needs perfect-negotiation + a consent/slot gate before it's real. See `SECURITY-AUDIT.md` "H-media" + the branch's `BROWSER-TEST.md`.
 
 ---
 

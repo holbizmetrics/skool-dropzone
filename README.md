@@ -48,6 +48,8 @@ So skool-dropzone's value proposition crystallizes:
 
 For member-only meetings, where the whole point is "admins aren't here" — that's the right boundary. The video itself is a known compromise (Stream sees it). The artifacts shared during the meeting don't have to be.
 
+**Honest status of these properties** (verified in [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md)): cross-meeting isolation holds, and "no third-party read" holds **when you set a room passphrase**. Without one ("convenience mode") the key derives from the meeting id the relay already knows — so the UI now warns before you join without a passphrase. Live screen share (in development) rides DTLS-SRTP, **not** the passphrase layer — labelled as such, so it's offered without being dressed up as passphrase-E2EE.
+
 ## Status
 
 **Working extension, Phases 0–7 built (v0.7.0).** The spine is in place:
@@ -58,11 +60,15 @@ For member-only meetings, where the whole point is "admins aren't here" — that
 - **Phase 5** — instant presentation (file-as-deck): image/PDF/video take over everyone's screen; presenter controls sync.
 - **Phase 6** — shared whiteboard overlay (normalized coords, per-segment broadcast).
 - **Phase 7** — type-as-slides (promote typed bullets to a styled slide everyone sees); bring-your-own-deck for PDF rides the Phase-5 file-as-deck path (PPT/Keynote → export to PDF first, by design).
+- **Phase 8 (in progress)** — security audit + hardening on master ([`SECURITY-AUDIT.md`](SECURITY-AUDIT.md)): relay bound to loopback, presentation/whiteboard sender-binding, receiver-side clamps, relay hardening, blob-MIME allowlist, and a confirm before joining without a passphrase. Plus `npm test` + GitHub Actions CI + a `sdz-v*` tag-driven release pipeline.
+
+**In development (branches, not merged):** a key-knowledge admission gate (`feat/h1-admission-handshake`) and a member-side **live screen share** (`feat/screen-share`, screen only — distinct from the file-clip "video share" above; audited and currently being reworked). Both owed a two-tab browser test before merge.
 
 **Verification.** The browser-independent layers are covered by headless harnesses that run in CI-style:
 
-- `node extension/test/node-verify.js` — crypto E2EE round-trip, cross-passphrase isolation, byte-exact file chunk/reassembly (incl. out-of-order), and wire-frame contract guards (20 checks).
-- `node signaling/node-verify-signaling.js` — relay room-routing, targeted SDP/ICE relay, room isolation, leave handling (12 checks).
+- `npm test` — runs the syntax gate + both suites below; GitHub Actions CI runs it on every push (see [Development](#development)).
+- `node extension/test/node-verify.js` — crypto E2EE round-trip, cross-passphrase isolation, byte-exact file chunk/reassembly, plus wire-frame + sender-binding + receiver-clamp contract guards (50 checks).
+- `node signaling/node-verify-signaling.js` — relay room-routing, targeted SDP/ICE relay, room isolation, leave handling, P3 hardening (14 checks).
 - `extension/test/harness.html` — two-tab manual test of the live WebRTC mesh, file transfer, presentation, whiteboard, and slides (no Skool meeting needed).
 
 **Still needs a real browser** to confirm end-to-end: the RTCPeerConnection handshake, data-channel mesh, and the fullscreen overlays. Load the unpacked extension (or open the harness in two tabs) for that pass.
