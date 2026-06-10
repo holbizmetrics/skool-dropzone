@@ -23,20 +23,23 @@
   let room = null;
   let onMessageCb = null;
   let onStatusCb = null;
+  let onTrackCb = null;
   let joined = false;
+  let localStream = null; // active screen-share MediaStream (presenter side)
 
   function meetingId() {
     const m = location.pathname.match(/\/live\/([^/?#]+)/);
     return m ? m[1] : "unknown";
   }
 
-  async function init({ passphrase, onMessage, onStatus, room: roomOverride }) {
+  async function init({ passphrase, onMessage, onStatus, onTrack, room: roomOverride }) {
     if (joined) return;
     // roomOverride lets the dev test harness use a fixed room without a
     // /live/<id> URL. In production (content script) it derives from the URL.
     room = roomOverride || meetingId();
     onMessageCb = onMessage;
     onStatusCb = onStatus;
+    onTrackCb = onTrack || null;
     key = await window.SDZCrypto.deriveKey(passphrase || "", room);
     joined = true;
     connectSignaling();
@@ -91,6 +94,11 @@
         emitStatus({});
       }
     };
+    // A peer is screen-sharing: surface the incoming video track. Media rides
+    // DTLS-SRTP, NOT the SDZCrypto passphrase layer (see SECURITY-AUDIT.md / H-media).
+    pc.ontrack = (e) => {
+      if (onTrackCb) onTrackCb(e.streams[0] || new MediaStream([e.track]), remoteId);
+    };
 
     if (initiator) {
       const dc = pc.createDataChannel("sdz");
@@ -108,7 +116,15 @@
   function setupDataChannel(remoteId, dc) {
     const entry = peers.get(remoteId);
     if (entry) entry.dc = dc;
-    dc.onopen = () => emitStatus({ state: "connected" });
+    dc.onopen = () => {
+      emitStatus({ state: "connected" });
+      // If we're already screen-sharing, push the track to this newly-connected
+      // peer and renegotiate so a late joiner sees the share.
+      if (localStream && entry) {
+        localStream.getTracks().forEach((t) => entry.pc.addTrack(t, localStream));
+        renegotiate(remoteId, entry.pc);
+      }
+    };
     dc.onclose = () => emitStatus({});
     dc.onmessage = async (e) => {
       try {
@@ -225,10 +241,78 @@
     return id;
   }
 
+  // === Screen share (live video over the same mesh) ===
+  //
+  // SECURITY BOUNDARY (intentional, documented): a screen-share video track
+  // rides WebRTC's own DTLS-SRTP, keyed from the SDP handshake — NOT from the
+  // SDZCrypto room passphrase. So it is encrypted in transit (and the relay is
+  // not a media server) but it is NOT under the passphrase-E2EE umbrella that
+  // chat/files get. True passphrase-grade media needs encoded-transform (SFrame)
+  // — deferred. The UI labels this so users aren't misled. See SECURITY-AUDIT.md.
+  //
+  // Renegotiation is kept additive: the proven initial offer/answer path is
+  // untouched; adding/removing a track creates a fresh offer that the existing
+  // onRemoteSignal answers. Single-presenter model (matches the present slot);
+  // two simultaneous sharers is a known unhandled edge.
+
+  async function renegotiate(remoteId, pc) {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      signal(remoteId, { sdp: pc.localDescription });
+    } catch (err) {
+      console.error("[SDZTransport] renegotiation failed:", err);
+    }
+  }
+
+  async function shareScreen() {
+    if (localStream) return { ok: true }; // already sharing
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    } catch (err) {
+      const cancelled = err && (err.name === "NotAllowedError" || err.name === "AbortError");
+      return { ok: false, reason: cancelled ? "Screen share cancelled." : "Could not start screen share." };
+    }
+    localStream = stream;
+    peers.forEach((e, remoteId) => {
+      if (e.dc && e.dc.readyState === "open") {
+        stream.getTracks().forEach((t) => e.pc.addTrack(t, stream));
+        renegotiate(remoteId, e.pc);
+      }
+    });
+    // The browser's own "Stop sharing" bar ends the track -> tear down cleanly.
+    stream.getVideoTracks().forEach((t) => (t.onended = () => stopScreen()));
+    emitStatus({ sharing: true });
+    return { ok: true };
+  }
+
+  function stopScreen() {
+    if (!localStream) return;
+    const tracks = localStream.getTracks();
+    peers.forEach((e, remoteId) => {
+      let removed = false;
+      e.pc.getSenders().forEach((s) => {
+        if (s.track && tracks.includes(s.track)) {
+          try {
+            e.pc.removeTrack(s);
+            removed = true;
+          } catch {}
+        }
+      });
+      if (removed) renegotiate(remoteId, e.pc);
+    });
+    tracks.forEach((t) => t.stop());
+    localStream = null;
+    emitStatus({ sharing: false });
+  }
+
   window.SDZTransport = {
     init,
     send,
     sendFile,
+    shareScreen,
+    stopScreen,
     get peerId() {
       return peerId;
     },
@@ -237,6 +321,9 @@
     },
     get joined() {
       return joined;
+    },
+    get sharing() {
+      return !!localStream;
     },
   };
 })();

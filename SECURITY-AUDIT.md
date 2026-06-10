@@ -114,6 +114,30 @@ A blind verifier corrected one of the auditor's own grades: the dev relay was as
 
 ---
 
+## Screen share (new feature, branch `feat/screen-share`) — security boundary "H-media"
+
+Added a member-side P2P screen share (`getDisplayMedia` → track over the existing
+mesh; **screen only, no webcam** — Skool's meeting already provides webcam). It
+carries a **deliberately weaker** guarantee than chat/files, labelled in the UI:
+
+- **Media rides WebRTC DTLS-SRTP**, keyed from the SDP handshake — **NOT** the
+  SDZCrypto room passphrase. So it is encrypted in transit and the relay is not a
+  media server, but it is **not under the passphrase-E2EE umbrella**. Concretely:
+  the M1 malicious-relay-MITM, which the passphrase neutralizes for chat/files,
+  **is not neutralized for screen-share video** — a MITM relay could intercept it.
+- True passphrase-grade media needs encoded-transform (SFrame / Insertable
+  Streams) — deferred as a project-sized follow-up.
+- Renegotiation is **additive** (the proven initial handshake is untouched; a
+  track change creates a fresh offer the existing `onRemoteSignal` answers).
+  Single-presenter model; two simultaneous sharers is an unhandled glare edge.
+- **Browser-only** — none of it is Node-verifiable; contract-checked in
+  `node-verify.js`, full verification is `BROWSER-TEST.md`. Not merged pending it.
+
+This is consistent with the lab's honesty rule (convenience mode is labelled the
+same way): the weaker mode is offered but never silently presented as E2EE.
+
+---
+
 ## Verified clean (do not re-walk)
 
 1. **No stored-XSS-over-E2EE.** `panel.js`, `present.js`, `whiteboard.js` consistently use `escapeHtml()` / `textContent` for every peer-controlled string (message bodies `panel.js:572/578/582`, file names `panel.js:372/451`, slide title/bullets `present.js:219/228`, presenter name `present.js:72`). The completeness critic walked each sink. The "E2EE" claim holds against the injection vector. (Residual: P6, the download-then-open blob path.)

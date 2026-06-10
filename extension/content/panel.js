@@ -79,6 +79,7 @@
       <div class="sdz-tools">
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
         <button class="sdz-slide-toggle" type="button" title="Type a slide and present it">▤ Slide</button>
+        <button class="sdz-share-toggle" type="button" title="Share your screen to the room (encrypted in transit, NOT under the room passphrase)">🖥 Share screen</button>
       </div>
 
       <div class="sdz-slide-compose" hidden>
@@ -119,6 +120,7 @@
     panel.querySelector(".sdz-wb-toggle").addEventListener("click", () => {
       if (window.SDZWhiteboard) window.SDZWhiteboard.toggle(window.SDZTransport);
     });
+    panel.querySelector(".sdz-share-toggle").addEventListener("click", onShareToggle);
     wireSlideCompose(panel);
 
     wireDragDrop(panel);
@@ -157,6 +159,7 @@
         passphrase,
         onMessage: onRemoteMessage,
         onStatus: onTransportStatus,
+        onTrack: (stream) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream),
       });
       connected = true;
       const join = document.querySelector(`#${PANEL_ID} .sdz-join`);
@@ -219,6 +222,23 @@
       case "file-end":
         endIncoming(obj);
         break;
+    }
+  }
+
+  async function onShareToggle() {
+    if (!window.SDZScreenShare) return;
+    const btn = document.querySelector(`#${PANEL_ID} .sdz-share-toggle`);
+    const r = await window.SDZScreenShare.toggle(window.SDZTransport);
+    if (!r.ok) {
+      addMessage({ kind: "system", body: r.reason || "Screen share unavailable." });
+      return;
+    }
+    if (btn) btn.textContent = r.sharing ? "■ Stop sharing" : "🖥 Share screen";
+    if (r.sharing) {
+      addMessage({
+        kind: "system",
+        body: "You are sharing your screen — encrypted in transit, but NOT under the room passphrase (unlike chat/files).",
+      });
     }
   }
 

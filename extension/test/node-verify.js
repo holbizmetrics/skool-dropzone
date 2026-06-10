@@ -301,6 +301,20 @@ function bytesEqual(a, b) {
     check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
   }
 
+  console.log("\nScreen share (transport media surface — browser-only feature, contract checks):");
+  {
+    const transportSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transport.js"), "utf8");
+    const ssSrc = fs.readFileSync(path.join(__dirname, "..", "content", "screenshare.js"), "utf8");
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
+    check("transport exposes shareScreen + stopScreen", /shareScreen,/.test(transportSrc) && /stopScreen,/.test(transportSrc));
+    check("transport surfaces remote tracks (ontrack -> onTrackCb)", /pc\.ontrack/.test(transportSrc) && /onTrackCb/.test(transportSrc));
+    check("share uses getDisplayMedia (screen) and NOT getUserMedia (webcam)", /getDisplayMedia/.test(transportSrc) && !/getUserMedia/.test(transportSrc));
+    check("renegotiation is additive (createOffer on track change)", /function renegotiate/.test(transportSrc));
+    check("screenshare module renders a viewer overlay from a stream", /showRemote/.test(ssSrc) && /srcObject/.test(ssSrc));
+    check("screenshare.js is loaded as a content script", manifest.content_scripts[0].js.includes("content/screenshare.js"));
+    check("security boundary is labelled (not passphrase-E2EE)", /not under (your |the )?room passphrase/i.test(ssSrc));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

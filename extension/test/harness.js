@@ -116,7 +116,13 @@
     }
     setStatus("connecting", "Connecting…");
     try {
-      await window.SDZTransport.init({ passphrase, room, onMessage, onStatus });
+      await window.SDZTransport.init({
+        passphrase,
+        room,
+        onMessage,
+        onStatus,
+        onTrack: (stream) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream),
+      });
       connected = true;
       $("join").disabled = true;
       $("join").textContent = "Joined";
@@ -177,6 +183,20 @@
       return;
     }
     window.SDZWhiteboard.toggle(window.SDZTransport);
+  });
+
+  $("share-screen").addEventListener("click", async () => {
+    if (!connected) {
+      addLine("sys", "join a room first, then share your screen");
+      return;
+    }
+    const r = await window.SDZScreenShare.toggle(window.SDZTransport);
+    if (!r.ok) {
+      addLine("sys", r.reason || "screen share unavailable");
+      return;
+    }
+    $("share-screen").textContent = r.sharing ? "■ Stop sharing" : "🖥 Share screen";
+    addLine("sys", r.sharing ? "you are sharing your screen (DTLS-encrypted, not passphrase-E2EE)" : "stopped screen share");
   });
 
   $("slide-present").addEventListener("click", () => {
