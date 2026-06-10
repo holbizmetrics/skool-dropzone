@@ -127,14 +127,26 @@ carries a **deliberately weaker** guarantee than chat/files, labelled in the UI:
   **is not neutralized for screen-share video** — a MITM relay could intercept it.
 - True passphrase-grade media needs encoded-transform (SFrame / Insertable
   Streams) — deferred as a project-sized follow-up.
-- Renegotiation is **additive** (the proven initial handshake is untouched; a
-  track change creates a fresh offer the existing `onRemoteSignal` answers).
-  Single-presenter model; two simultaneous sharers is an unhandled glare edge.
 - **Browser-only** — none of it is Node-verifiable; contract-checked in
   `node-verify.js`, full verification is `BROWSER-TEST.md`. Not merged pending it.
 
 This is consistent with the lab's honesty rule (convenience mode is labelled the
 same way): the weaker mode is offered but never silently presented as E2EE.
+
+### Audit (2026-06-10, TRIAD + KG + two blind verifiers) and rework
+
+The first cut was audited and **found broken in two independent ways**, both tracing to one root cause: it copied present.js's overlay *shell* but not its *guards / negotiation discipline* — a self-apply gap (P1 + H2 were added to file-present the same session, then not carried to the new path).
+
+| Finding | Sev | Status after rework |
+|---|---|---|
+| Renegotiation glare-deadlocks (no perfect-negotiation) for 3+ peers / late-join | BLOCKER | **FIXED** — full perfect negotiation in `createPeer`/`onRemoteSignal` (politeness + `makingOffer` + collision rollback); `onnegotiationneeded` drives all offers |
+| Double-`addTrack` → uncaught `InvalidAccessError` aborts the peer loop | HIGH | **FIXED** — `addTracksTo` sender-exists guard + try/catch |
+| Forced-fullscreen abuse, no consent/slot gate, floodable | CRITICAL | **FIXED** — viewer gets a dismissible **consent prompt** (no auto-fullscreen); single-presenter slot bound to `fromPeer` |
+| Privacy over-trust (labelling too quiet, no pre-action confirm) | HIGH | **FIXED** — H2-style **pre-share confirm** before `getDisplayMedia` |
+| Stop leaks (viewer overlay hangs; button desync) | MED | **FIXED** — explicit `__sdz-screen-stop` message + `mute`/`ended` listeners; button driven by the `sharing` status field |
+| Screen-only / DTLS-not-passphrase claims | — | **PASS** (unchanged) |
+
+Still open / follow-ups (MED): showing the **presenter's identity** in the consent prompt; **unifying** the screen-share and present overlays into one slot-arbitrated owner (currently two overlays blind to each other — Esc/stacking). Everything above is **contract-verified only** (64 checks); the live WebRTC behavior is owed `BROWSER-TEST.md` before merge.
 
 ---
 

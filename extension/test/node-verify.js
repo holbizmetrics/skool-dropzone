@@ -301,18 +301,30 @@ function bytesEqual(a, b) {
     check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
   }
 
-  console.log("\nScreen share (transport media surface — browser-only feature, contract checks):");
+  console.log("\nScreen share (browser-only feature — contract checks; reworked per the H-media audit):");
   {
     const transportSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transport.js"), "utf8");
     const ssSrc = fs.readFileSync(path.join(__dirname, "..", "content", "screenshare.js"), "utf8");
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const harnessSrc = fs.readFileSync(path.join(__dirname, "harness.js"), "utf8");
     const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
     check("transport exposes shareScreen + stopScreen", /shareScreen,/.test(transportSrc) && /stopScreen,/.test(transportSrc));
     check("transport surfaces remote tracks (ontrack -> onTrackCb)", /pc\.ontrack/.test(transportSrc) && /onTrackCb/.test(transportSrc));
     check("share uses getDisplayMedia (screen) and NOT getUserMedia (webcam)", /getDisplayMedia/.test(transportSrc) && !/getUserMedia/.test(transportSrc));
-    check("renegotiation is additive (createOffer on track change)", /function renegotiate/.test(transportSrc));
-    check("screenshare module renders a viewer overlay from a stream", /showRemote/.test(ssSrc) && /srcObject/.test(ssSrc));
     check("screenshare.js is loaded as a content script", manifest.content_scripts[0].js.includes("content/screenshare.js"));
     check("security boundary is labelled (not passphrase-E2EE)", /not under (your |the )?room passphrase/i.test(ssSrc));
+    // H-media fix 1 — perfect negotiation (replaces the broken additive renegotiate)
+    check("perfect negotiation: politeness + makingOffer + onnegotiationneeded", /polite:/.test(transportSrc) && /makingOffer/.test(transportSrc) && /onnegotiationneeded/.test(transportSrc));
+    check("offer-collision handling (ignoreOffer on glare)", /ignoreOffer/.test(transportSrc) && /offerCollision/.test(transportSrc));
+    check("addTrack guarded against double-add (sender-exists)", /getSenders\(\)\.some/.test(transportSrc));
+    check("manual renegotiate() removed (driven by onnegotiationneeded)", !/function renegotiate/.test(transportSrc));
+    // H-media fix 2 — consent + slot on the viewer (no auto-fullscreen)
+    check("viewer shows a CONSENT prompt, not auto-fullscreen", /showConsent/.test(ssSrc) && /function showRemote/.test(ssSrc));
+    check("single-presenter slot (different peer can't seize it)", /currentPeer !== fromPeer/.test(ssSrc));
+    check("fromPeer threaded into showRemote (panel + harness)", /showRemote\(stream, fromPeer\)/.test(panelSrc) && /showRemote\(stream, fromPeer\)/.test(harnessSrc));
+    check("deterministic teardown via __sdz-screen-stop", /__sdz-screen-stop/.test(transportSrc) && /__sdz-screen-stop/.test(ssSrc));
+    // H-media fix 3 — pre-share confirm (sharer side)
+    check("pre-share confirm before getDisplayMedia (H2-style)", /shareConfirmed/.test(panelSrc));
   }
 
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);

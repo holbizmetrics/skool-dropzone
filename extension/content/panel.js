@@ -26,6 +26,7 @@
   let connected = false; // joined the E2EE room
   let convenienceMode = false; // joined with empty passphrase
   let convenienceConfirmed = false; // user explicitly accepted the no-passphrase exposure (H2)
+  let shareConfirmed = false; // user explicitly accepted the screen-share DTLS-not-passphrase boundary
   let lastPeers = 0; // for presence (join/leave) detection
   const messages = [];
   const staged = new Map();
@@ -159,7 +160,7 @@
         passphrase,
         onMessage: onRemoteMessage,
         onStatus: onTransportStatus,
-        onTrack: (stream) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream),
+        onTrack: (stream, fromPeer) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream, fromPeer),
       });
       connected = true;
       const join = document.querySelector(`#${PANEL_ID} .sdz-join`);
@@ -178,6 +179,13 @@
     if (s.state === "signaling-error" || s.state === "signaling-disconnected" || s.state === "signaling-closed") {
       setStatus("error", "Signaling relay not reachable — is the local relay running? (npm start in /signaling)");
       return;
+    }
+    // Screen-share button reflects transport state — covers the browser's own
+    // "Stop sharing" bar, which calls stopScreen() directly (button-label desync).
+    if (typeof s.sharing === "boolean") {
+      const sbtn = document.querySelector(`#${PANEL_ID} .sdz-share-toggle`);
+      if (sbtn) sbtn.textContent = s.sharing ? "■ Stop sharing" : "🖥 Share screen";
+      if (!s.sharing) shareConfirmed = false;
     }
     // Presence (Phase 3): announce members joining/leaving the mesh.
     if (n !== lastPeers) {
@@ -206,6 +214,7 @@
     // Presentation (present-*) and whiteboard (wb-*) are handled by their modules.
     if (window.SDZPresent && window.SDZPresent.handleMessage(obj, fromPeer)) return;
     if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj, fromPeer)) return;
+    if (window.SDZScreenShare && window.SDZScreenShare.handleMessage(obj, fromPeer)) return;
     switch (obj.kind) {
       case "undecryptable":
         addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });
@@ -228,18 +237,29 @@
   async function onShareToggle() {
     if (!window.SDZScreenShare) return;
     const btn = document.querySelector(`#${PANEL_ID} .sdz-share-toggle`);
+    // Stopping needs no confirm.
+    if (window.SDZTransport && window.SDZTransport.sharing) {
+      window.SDZTransport.stopScreen();
+      if (btn) btn.textContent = "🖥 Share screen";
+      return;
+    }
+    // H2-style pre-share confirm: screen share is NOT under the room passphrase.
+    if (!shareConfirmed) {
+      shareConfirmed = true;
+      if (btn) btn.textContent = "Share screen anyway";
+      addMessage({
+        kind: "system",
+        body: "Your screen will be encrypted in transit but NOT under your room passphrase (unlike chat/files). Click Share screen again to continue.",
+      });
+      return;
+    }
     const r = await window.SDZScreenShare.toggle(window.SDZTransport);
     if (!r.ok) {
       addMessage({ kind: "system", body: r.reason || "Screen share unavailable." });
+      if (btn) btn.textContent = "🖥 Share screen"; // reset so the user can retry
       return;
     }
     if (btn) btn.textContent = r.sharing ? "■ Stop sharing" : "🖥 Share screen";
-    if (r.sharing) {
-      addMessage({
-        kind: "system",
-        body: "You are sharing your screen — encrypted in transit, but NOT under the room passphrase (unlike chat/files).",
-      });
-    }
   }
 
   // === Phase 4: incoming file reassembly ===

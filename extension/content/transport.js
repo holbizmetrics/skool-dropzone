@@ -83,7 +83,12 @@
   function createPeer(remoteId, initiator) {
     if (peers.has(remoteId)) return peers.get(remoteId);
     const pc = new RTCPeerConnection(RTC_CONFIG);
-    const entry = { pc, dc: null };
+    // Perfect-negotiation state (SECURITY-AUDIT H-media fix). The old additive
+    // scheme only worked for the initial connection, where the joiner was the
+    // sole offerer. Adding a screen-share track mid-call makes EITHER side an
+    // offerer -> glare -> deadlock. Politeness is a stable, opposite assignment
+    // from the two peer ids (exactly one side is polite and rolls back).
+    const entry = { pc, dc: null, polite: peerId < remoteId, makingOffer: false, ignoreOffer: false };
     peers.set(remoteId, entry);
 
     pc.onicecandidate = (e) => {
@@ -99,14 +104,24 @@
     pc.ontrack = (e) => {
       if (onTrackCb) onTrackCb(e.streams[0] || new MediaStream([e.track]), remoteId);
     };
+    // Single source of offers: fires on data-channel creation (initial connect)
+    // AND on add/removeTrack (renegotiation). Glare is handled in onRemoteSignal.
+    pc.onnegotiationneeded = async () => {
+      try {
+        entry.makingOffer = true;
+        await pc.setLocalDescription();
+        signal(remoteId, { description: pc.localDescription });
+      } catch (err) {
+        console.error("[SDZTransport] (re)negotiation offer failed:", err);
+      } finally {
+        entry.makingOffer = false;
+      }
+    };
 
     if (initiator) {
+      // Creating the data channel triggers onnegotiationneeded -> initial offer.
       const dc = pc.createDataChannel("sdz");
       setupDataChannel(remoteId, dc);
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer).then(() => offer))
-        .then((offer) => signal(remoteId, { sdp: offer }))
-        .catch((err) => console.error("[SDZTransport] offer failed:", err));
     } else {
       pc.ondatachannel = (e) => setupDataChannel(remoteId, e.channel);
     }
@@ -119,11 +134,9 @@
     dc.onopen = () => {
       emitStatus({ state: "connected" });
       // If we're already screen-sharing, push the track to this newly-connected
-      // peer and renegotiate so a late joiner sees the share.
-      if (localStream && entry) {
-        localStream.getTracks().forEach((t) => entry.pc.addTrack(t, localStream));
-        renegotiate(remoteId, entry.pc);
-      }
+      // peer (onnegotiationneeded fires the renegotiation; addTracksTo guards
+      // against a double-add that would otherwise throw and abort the caller).
+      if (localStream && entry) addTracksTo(entry.pc, localStream);
     };
     dc.onclose = () => emitStatus({});
     dc.onmessage = async (e) => {
@@ -145,15 +158,26 @@
     if (!entry) entry = createPeer(remoteId, false);
     const pc = entry.pc;
     try {
-      if (data.sdp) {
-        await pc.setRemoteDescription(data.sdp);
-        if (data.sdp.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          signal(remoteId, { sdp: answer });
+      if (data.description) {
+        // Perfect negotiation: on an offer collision the impolite peer ignores
+        // the incoming offer; the polite peer accepts it (setRemoteDescription
+        // implicitly rolls back its own offer). This is what makes mid-call
+        // screen-share renegotiation glare-safe.
+        const offerCollision =
+          data.description.type === "offer" && (entry.makingOffer || pc.signalingState !== "stable");
+        entry.ignoreOffer = !entry.polite && offerCollision;
+        if (entry.ignoreOffer) return;
+        await pc.setRemoteDescription(data.description);
+        if (data.description.type === "offer") {
+          await pc.setLocalDescription();
+          signal(remoteId, { description: pc.localDescription });
         }
       } else if (data.candidate) {
-        await pc.addIceCandidate(data.candidate);
+        try {
+          await pc.addIceCandidate(data.candidate);
+        } catch (err) {
+          if (!entry.ignoreOffer) throw err; // a candidate for an ignored offer is expected to fail
+        }
       }
     } catch (err) {
       console.error("[SDZTransport] signal handling failed:", err);
@@ -250,19 +274,21 @@
   // chat/files get. True passphrase-grade media needs encoded-transform (SFrame)
   // — deferred. The UI labels this so users aren't misled. See SECURITY-AUDIT.md.
   //
-  // Renegotiation is kept additive: the proven initial offer/answer path is
-  // untouched; adding/removing a track creates a fresh offer that the existing
-  // onRemoteSignal answers. Single-presenter model (matches the present slot);
-  // two simultaneous sharers is a known unhandled edge.
+  // Renegotiation uses perfect negotiation (see createPeer / onRemoteSignal):
+  // add/removeTrack fires onnegotiationneeded, glare is handled by politeness.
+  // Single-presenter on the viewer side (consent + slot in screenshare.js).
 
-  async function renegotiate(remoteId, pc) {
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      signal(remoteId, { sdp: pc.localDescription });
-    } catch (err) {
-      console.error("[SDZTransport] renegotiation failed:", err);
-    }
+  // Add stream tracks to a pc, skipping any track that already has a sender —
+  // addTrack on an existing sender throws InvalidAccessError and would abort the
+  // caller's loop (SECURITY-AUDIT). onnegotiationneeded fires the offer.
+  function addTracksTo(pc, stream) {
+    stream.getTracks().forEach((t) => {
+      try {
+        if (!pc.getSenders().some((s) => s.track === t)) pc.addTrack(t, stream);
+      } catch (err) {
+        console.error("[SDZTransport] addTrack failed:", err);
+      }
+    });
   }
 
   async function shareScreen() {
@@ -275,11 +301,9 @@
       return { ok: false, reason: cancelled ? "Screen share cancelled." : "Could not start screen share." };
     }
     localStream = stream;
-    peers.forEach((e, remoteId) => {
-      if (e.dc && e.dc.readyState === "open") {
-        stream.getTracks().forEach((t) => e.pc.addTrack(t, stream));
-        renegotiate(remoteId, e.pc);
-      }
+    // onnegotiationneeded fires the renegotiation per peer as tracks are added.
+    peers.forEach((e) => {
+      if (e.dc && e.dc.readyState === "open") addTracksTo(e.pc, stream);
     });
     // The browser's own "Stop sharing" bar ends the track -> tear down cleanly.
     stream.getVideoTracks().forEach((t) => (t.onended = () => stopScreen()));
@@ -290,17 +314,18 @@
   function stopScreen() {
     if (!localStream) return;
     const tracks = localStream.getTracks();
-    peers.forEach((e, remoteId) => {
-      let removed = false;
+    // Tell viewers explicitly so their overlay closes deterministically — a
+    // removeTrack surfaces as 'mute' (not 'ended') on the receiver, so we can't
+    // rely on a track event alone. Goes over the E2EE data channel.
+    send({ kind: "__sdz-screen-stop" });
+    peers.forEach((e) => {
       e.pc.getSenders().forEach((s) => {
         if (s.track && tracks.includes(s.track)) {
           try {
-            e.pc.removeTrack(s);
-            removed = true;
+            e.pc.removeTrack(s); // onnegotiationneeded fires the renegotiation
           } catch {}
         }
       });
-      if (removed) renegotiate(remoteId, e.pc);
     });
     tracks.forEach((t) => t.stop());
     localStream = null;

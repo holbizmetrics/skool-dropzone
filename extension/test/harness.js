@@ -57,6 +57,7 @@
     // Phase 5/6: presentation + whiteboard handled by their shared modules.
     if (window.SDZPresent && window.SDZPresent.handleMessage(obj, fromPeer)) return;
     if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj, fromPeer)) return;
+    if (window.SDZScreenShare && window.SDZScreenShare.handleMessage(obj, fromPeer)) return;
     switch (obj.kind) {
       case "undecryptable":
         addLine("sys", "⚠ a message arrived that couldn't be decrypted (passphrase mismatch)");
@@ -121,7 +122,7 @@
         room,
         onMessage,
         onStatus,
-        onTrack: (stream) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream),
+        onTrack: (stream, fromPeer) => window.SDZScreenShare && window.SDZScreenShare.showRemote(stream, fromPeer),
       });
       connected = true;
       $("join").disabled = true;
