@@ -12,8 +12,28 @@
 // run a 20s heartbeat (a trivial async chrome API call resets the idle
 // timer) plus an app-level WS ping so the connection stays warm.
 
-const SIGNALING_URL = "ws://localhost:8080";
+// Default signaling relay. `ws://localhost:8080` is the dev / same-machine
+// two-tab default. For cross-internet use (two strangers, two locations), point
+// this at a HOSTED relay (a `wss://…` address, added to host_permissions) — or
+// let a user override it per-install via chrome.storage.local key `relayUrl`.
+// The relay only ever sees ciphertext + SDP/ICE, so a public relay is safe by
+// design (untrusted-relay model — see SECURITY-AUDIT.md).
+const DEFAULT_RELAY_URL = "ws://localhost:8080";
 const MAX_SOCKETS = 8; // cap concurrent signaling sockets (SECURITY-AUDIT P4)
+
+// Resolve the relay URL at connect time: a user-set override wins, else default.
+function resolveRelayUrl() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get("relayUrl", (r) => {
+        const u = r && typeof r.relayUrl === "string" && r.relayUrl.trim();
+        resolve(u || DEFAULT_RELAY_URL);
+      });
+    } catch {
+      resolve(DEFAULT_RELAY_URL);
+    }
+  });
+}
 
 let openSockets = 0;
 let keepAliveTimer = null;
@@ -65,40 +85,42 @@ chrome.runtime.onConnect.addListener((port) => {
         port.postMessage({ type: "ws-error", error: "too many signaling sockets" });
         return;
       }
-      try {
-        ws = new WebSocket(SIGNALING_URL);
-      } catch (e) {
-        port.postMessage({ type: "ws-error", error: String(e) });
-        return;
-      }
-      ws.onopen = () => {
-        counted = true;
-        openSockets++;
-        startKeepAlive();
-        port.postMessage({ type: "ws-open" });
-        queue.forEach((m) => ws.send(JSON.stringify(m)));
-        queue = [];
-        // App-level ping keeps the socket warm; relay ignores unknown types.
-        wsPing = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping" }));
-          }
-        }, 20000);
-      };
-      ws.onmessage = (e) => {
-        let parsed;
+      resolveRelayUrl().then((relayUrl) => {
         try {
-          parsed = JSON.parse(e.data);
-        } catch {
+          ws = new WebSocket(relayUrl);
+        } catch (e) {
+          port.postMessage({ type: "ws-error", error: String(e) });
           return;
         }
-        port.postMessage(parsed);
-      };
-      ws.onclose = () => {
-        cleanup();
-        port.postMessage({ type: "ws-closed" });
-      };
-      ws.onerror = () => port.postMessage({ type: "ws-error" });
+        ws.onopen = () => {
+          counted = true;
+          openSockets++;
+          startKeepAlive();
+          port.postMessage({ type: "ws-open" });
+          queue.forEach((m) => ws.send(JSON.stringify(m)));
+          queue = [];
+          // App-level ping keeps the socket warm; relay ignores unknown types.
+          wsPing = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "ping" }));
+            }
+          }, 20000);
+        };
+        ws.onmessage = (e) => {
+          let parsed;
+          try {
+            parsed = JSON.parse(e.data);
+          } catch {
+            return;
+          }
+          port.postMessage(parsed);
+        };
+        ws.onclose = () => {
+          cleanup();
+          port.postMessage({ type: "ws-closed" });
+        };
+        ws.onerror = () => port.postMessage({ type: "ws-error" });
+      });
       return;
     }
 

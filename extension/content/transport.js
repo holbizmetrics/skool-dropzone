@@ -9,9 +9,22 @@
 // Existing peers wait for the offer. Small-room mesh (fine up to ~10).
 
 (() => {
-  // Localhost mesh connects via host candidates — no STUN/TURN needed.
-  // (Production over the internet will add a STUN server here.)
-  const RTC_CONFIG = { iceServers: [] };
+  // STUN lets peers behind NAT / home routers discover a publicly reachable
+  // address so they can form a DIRECT peer-to-peer link. Public Google STUN is
+  // free and stateless — it sees only address-discovery traffic, never content.
+  // Same-machine two-tab still works without it (host candidates), so this is
+  // additive, not a behavior change for the local case.
+  //
+  // NOT covered: symmetric-NAT pairs that STUN can't traverse need a TURN
+  // server, which RELAYS the media/data (a real bandwidth cost). TURN is not
+  // bundled yet — a small fraction of strict-NAT users won't connect until it
+  // is. See feat/hosted-relay notes / ROADMAP.
+  const RTC_CONFIG = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
+  };
 
   const peerId =
     (crypto.randomUUID && crypto.randomUUID()) ||
