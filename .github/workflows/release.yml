@@ -35,7 +35,7 @@ jobs:
       - name: Package extension
         run: |
           mkdir -p dist
-          ( cd extension && zip -r "../dist/skool-dropzone-${GITHUB_REF_NAME}.zip" . -x '*/node_modules/*' '*/.DS_Store' )
+          ( cd extension && zip -r "../dist/skool-dropzone-${GITHUB_REF_NAME}.zip" . -x '*/node_modules/*' '*/.DS_Store' 'test/*' )
           ls -la dist
 
       - name: Create GitHub Release
