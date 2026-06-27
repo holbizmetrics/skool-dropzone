@@ -179,6 +179,79 @@
     window.SDZWhiteboard.toggle(window.SDZTransport);
   });
 
+  // --- Manual connect-code signaling (serverless P2P; no relay) ---
+  // Reuses the Room + Passphrase fields and the same onMessage/onStatus, so once
+  // a manual peer attaches, the composer / file / present controls work as-is.
+  function manualReady() {
+    if (!window.SDZManual) {
+      addLine("sys", "manual signaling unavailable — open via chrome-extension://…, not file://");
+      return false;
+    }
+    return true;
+  }
+  function manualOpts() {
+    const room = $("room").value.trim() || "test-room";
+    const passphrase = $("pass").value;
+    convenience = !passphrase;
+    return { passphrase, room, onMessage, onStatus };
+  }
+  function lockControls(note) {
+    connected = true;
+    $("join").disabled = true;
+    $("join").textContent = "Joined";
+    $("room").disabled = true;
+    $("pass").disabled = true;
+    addLine("sys", note);
+  }
+  function selectAll(el) {
+    el.focus();
+    el.select();
+  }
+
+  $("m-offer").addEventListener("click", async () => {
+    if (!manualReady()) return;
+    setStatus("connecting", "Creating offer code…");
+    try {
+      $("m-offer-out").value = await window.SDZManual.createOffer(manualOpts());
+      selectAll($("m-offer-out"));
+      addLine("sys", "offer created — send the code to the other person, then paste their answer below");
+    } catch (e) {
+      setStatus("error", "offer failed: " + (e && e.message ? e.message : e));
+    }
+  });
+
+  $("m-answer").addEventListener("click", async () => {
+    if (!manualReady()) return;
+    const offer = $("m-offer-in").value.trim();
+    if (!offer) {
+      addLine("sys", "paste the offer code into Side B first");
+      return;
+    }
+    setStatus("connecting", "Making answer code…");
+    try {
+      $("m-answer-out").value = await window.SDZManual.acceptOffer(offer, manualOpts());
+      selectAll($("m-answer-out"));
+      lockControls("answer created — send it back to Side A; you'll connect once they finish");
+    } catch (e) {
+      setStatus("error", "answer failed: " + (e && e.message ? e.message : e));
+    }
+  });
+
+  $("m-finish").addEventListener("click", async () => {
+    if (!manualReady()) return;
+    const answer = $("m-answer-in").value.trim();
+    if (!answer) {
+      addLine("sys", "paste the answer code from Side B first");
+      return;
+    }
+    try {
+      await window.SDZManual.acceptAnswer(answer);
+      lockControls("answer accepted — establishing the peer-to-peer link…");
+    } catch (e) {
+      setStatus("error", "finish failed: " + (e && e.message ? e.message : e));
+    }
+  });
+
   $("slide-present").addEventListener("click", () => {
     if (!connected) {
       addLine("sys", "join a room first, then present a slide");

@@ -21,6 +21,31 @@
       <button id="join">Join room</button>
     </div>
 
+    <details class="manualbox">
+      <summary>Manual connect — no server (paste codes, works across the internet)</summary>
+      <p class="filehint" style="margin: 6px 0">
+        Zero-server peer-to-peer using the Room + Passphrase above. One person creates an offer
+        code; the other pastes it and returns an answer code; the first pastes that back. Send the
+        codes through any channel you share (the Skool chat, a DM). No relay, no
+        <code>npm start</code>.
+      </p>
+      <div class="manualgrid">
+        <div class="manualcol">
+          <strong>Side A — start the connection</strong>
+          <button id="m-offer" type="button">1 · Create offer code</button>
+          <textarea id="m-offer-out" rows="3" readonly placeholder="offer code appears here → send it to the other person"></textarea>
+          <textarea id="m-answer-in" rows="3" placeholder="paste the ANSWER code they send back ↓"></textarea>
+          <button id="m-finish" type="button">3 · Finish connecting</button>
+        </div>
+        <div class="manualcol">
+          <strong>Side B — you received an offer</strong>
+          <textarea id="m-offer-in" rows="3" placeholder="paste the OFFER code you received ↓"></textarea>
+          <button id="m-answer" type="button">2 · Make answer code</button>
+          <textarea id="m-answer-out" rows="3" readonly placeholder="answer code appears here → send it back to Side A"></textarea>
+        </div>
+      </div>
+    </details>
+
     <div id="status" class="status" data-mode="offline">Not connected.</div>
 
     <div id="crypto-line" class="crypto-line">crypto self-test: <span id="crypto-result">…</span></div>
@@ -56,6 +81,7 @@
 
     <script src="../content/crypto.js"></script>
     <script src="../content/transport.js"></script>
+    <script src="../content/manual-signal.js"></script>
     <script src="../content/present.js"></script>
     <script src="../content/whiteboard.js"></script>
     <script src="harness.js"></script>
