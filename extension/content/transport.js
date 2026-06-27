@@ -161,6 +161,27 @@
     if (port) port.postMessage({ type: "signal", to, data });
   }
 
+  // Manual ("connect-code") signaling reuses this transport's E2EE + data-channel
+  // + file-transfer machinery. manual-signal.js builds the RTCPeerConnection and
+  // runs the copy-paste SDP exchange, then hands the peer here so send() /
+  // sendFile() / message decryption all work identically to the relay path.
+  async function attachManualPeer({ pc, dc, remoteId, passphrase, room: roomOverride, onMessage, onStatus }) {
+    if (onMessage) onMessageCb = onMessage;
+    if (onStatus) onStatusCb = onStatus;
+    if (!key) {
+      room = roomOverride || meetingId();
+      key = await window.SDZCrypto.deriveKey(passphrase || "", room);
+    }
+    const id = remoteId || "manual-" + Math.random().toString(36).slice(2);
+    const entry = { pc, dc: null };
+    peers.set(id, entry);
+    pc.onconnectionstatechange = () => {
+      if (["failed", "closed", "disconnected"].includes(pc.connectionState)) emitStatus({});
+    };
+    setupDataChannel(id, dc); // sets entry.dc + dc.onopen/onmessage (emits "connected")
+    joined = true;
+  }
+
   function removePeer(remoteId) {
     const entry = peers.get(remoteId);
     if (entry) {
@@ -242,6 +263,10 @@
     init,
     send,
     sendFile,
+    attachManualPeer,
+    get rtcConfig() {
+      return RTC_CONFIG; // shared so the manual signaling path uses the same STUN config
+    },
     get peerId() {
       return peerId;
     },

@@ -301,6 +301,35 @@ function bytesEqual(a, b) {
     check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
   }
 
+  console.log("\nManual connect-code signaling (codec — orchestration is browser-test-owed):");
+  {
+    // manual-signal.js only touches RTCPeerConnection / SDZTransport INSIDE the
+    // handshake functions (not called here), so loading + the codec are pure.
+    // window shim already set above; btoa/atob are Node 22 globals.
+    const manualSrc = fs.readFileSync(path.join(__dirname, "..", "content", "manual-signal.js"), "utf8");
+    vm.runInThisContext(manualSrc, { filename: "manual-signal.js" });
+    const M = globalThis.window.SDZManual;
+    check("SDZManual exposed with codec", !!M && typeof M.encodeConnectCode === "function");
+
+    const offer = { type: "offer", sdp: "v=0\r\no=- 1 2 IN IP4 0.0.0.0\r\na=ice-ufrag:abcd\r\n" };
+    const code = M.encodeConnectCode(offer);
+    check("offer code carries the SDZ1. marker", /^SDZ1\./.test(code));
+    const round = M.decodeConnectCode(code);
+    check("encode->decode round-trips type", round.type === "offer");
+    check("encode->decode round-trips sdp byte-exactly", round.sdp === offer.sdp);
+    check("answer code decodes as answer", M.decodeConnectCode(M.encodeConnectCode({ type: "answer", sdp: "v=0\r\n" })).type === "answer");
+
+    // Tolerates whitespace/line-wraps a chat client may insert mid-paste.
+    const wrapped = code.slice(0, 20) + "\n   " + code.slice(20);
+    check("decode tolerates injected whitespace/newlines", M.decodeConnectCode(wrapped).sdp === offer.sdp);
+
+    // Rejects malformed input with a clear throw (not a silent bad connection).
+    const throws = (fn) => { try { fn(); return false; } catch { return true; } };
+    check("decode rejects a non-connect-code", throws(() => M.decodeConnectCode("hello, paste me")));
+    check("decode rejects a corrupted code", throws(() => M.decodeConnectCode("SDZ1.!!!notbase64!!!")));
+    check("decode rejects a wrong-type payload", throws(() => M.decodeConnectCode("SDZ1." + Buffer.from('{"v":1,"t":"nope","s":"x"}').toString("base64"))));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));
