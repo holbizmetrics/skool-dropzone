@@ -267,6 +267,9 @@
     get rtcConfig() {
       return RTC_CONFIG; // shared so the manual signaling path uses the same STUN config
     },
+    get room() {
+      return room; // the resolved room/meetingId actually used (for the safe-word)
+    },
     get peerId() {
       return peerId;
     },

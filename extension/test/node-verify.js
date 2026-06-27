@@ -301,6 +301,18 @@ function bytesEqual(a, b) {
     check("passphrase placeholder no longer silently invites blank", !/leave blank = convenience mode/.test(panelSrc));
   }
 
+  console.log("\nRoom safe-word (light key-confirmation fingerprint):");
+  {
+    const fp1 = await SDZCrypto.roomFingerprint("otter", "room-A");
+    const fp1b = await SDZCrypto.roomFingerprint("otter", "room-A");
+    check("safe-word is deterministic (same passphrase+room)", fp1 === fp1b);
+    check("safe-word renders 5 emoji", fp1.split(" ").filter(Boolean).length === 5);
+    check("different passphrase -> different safe-word", fp1 !== (await SDZCrypto.roomFingerprint("otterX", "room-A")));
+    check("different room -> different safe-word", fp1 !== (await SDZCrypto.roomFingerprint("otter", "room-B")));
+    const conv = await SDZCrypto.roomFingerprint("", "room-A");
+    check("convenience-mode safe-word deterministic + != passphrase one", conv === (await SDZCrypto.roomFingerprint("", "room-A")) && conv !== fp1);
+  }
+
   console.log("\nManual connect-code signaling (codec — orchestration is browser-test-owed):");
   {
     // manual-signal.js only touches RTCPeerConnection / SDZTransport INSIDE the

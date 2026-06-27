@@ -64,6 +64,53 @@
     );
   }
 
+  // A public, human-comparable "room safe-word": a few emoji deterministically
+  // derived from the SAME passphrase + room. Everyone who joined the same room
+  // with the same passphrase sees the SAME emoji; a mismatch means someone is in
+  // a different room or mistyped the passphrase (which otherwise only surfaces as
+  // silent "couldn't decrypt" messages). Spiritually like Telegram/Signal's
+  // safety emoji, but here it confirms a *shared room secret*, not an
+  // anti-MITM key exchange (the relay is untrusted by design — there's no
+  // handshake to MITM). See SIGNALING / SECURITY-AUDIT notes.
+  //
+  // Domain-separated from the encryption key (different salt) AND derived at the
+  // same slow PBKDF2 cost, so showing the emoji publicly does NOT make brute-
+  // forcing the passphrase any cheaper than attacking a captured ciphertext.
+  // 64-emoji alphabet (256 % 64 == 0 → no modulo bias); 5 positions.
+  const FINGERPRINT_EMOJI = [
+    "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔",
+    "🐧","🐦","🦆","🦉","🐢","🐍","🦋","🐌","🐝","🐞","🦀","🐙","🐠","🐬","🐳","🦈",
+    "🍎","🍌","🍓","🍒","🍑","🍍","🥑","🌽","🥕","🍄","🍕","🍔","🍟","🧀","🍪","🍩",
+    "🌳","🌵","🌻","🌹","🍀","🔥","🌈","🚀","🎸","🎹","🎺","🥁","🎲","🎯","🎮","🎨",
+  ];
+  const FINGERPRINT_LEN = 5;
+
+  async function roomFingerprint(passphrase, meetingId) {
+    const material = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(passphrase || ""),
+      { name: "PBKDF2" },
+      false,
+      ["deriveBits"]
+    );
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("skool-dropzone-fingerprint:" + (meetingId || "")),
+        iterations: PBKDF2_ITERATIONS,
+        hash: "SHA-256",
+      },
+      material,
+      256
+    );
+    const bytes = new Uint8Array(bits);
+    const out = [];
+    for (let i = 0; i < FINGERPRINT_LEN; i++) {
+      out.push(FINGERPRINT_EMOJI[bytes[i] % FINGERPRINT_EMOJI.length]);
+    }
+    return out.join(" ");
+  }
+
   // Encrypt a string or ArrayBuffer. Returns { iv, ct } as base64 strings.
   async function encrypt(key, data) {
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH_BYTES));
@@ -110,5 +157,5 @@
     }
   }
 
-  window.SDZCrypto = { deriveKey, encrypt, decryptBytes, decryptText, selfTest, toB64, fromB64 };
+  window.SDZCrypto = { deriveKey, roomFingerprint, encrypt, decryptBytes, decryptText, selfTest, toB64, fromB64 };
 })();

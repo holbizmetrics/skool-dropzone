@@ -25,6 +25,21 @@
     el.textContent = text;
   }
 
+  // The room "safe-word": everyone with the same passphrase+room sees the same
+  // emoji. Different emoji = different passphrase or room (i.e. you're not in the
+  // same protected session). Compare it out loud / in the call.
+  async function showSafeWord(passphrase, room) {
+    try {
+      const fp = await window.SDZCrypto.roomFingerprint(passphrase, room);
+      const el = $("safeword");
+      el.textContent = "Room safe-word:  " + fp;
+      el.title = "Everyone here should see the SAME emoji. Different emoji = different passphrase/room.";
+      el.style.display = "";
+    } catch {
+      /* non-fatal — the safe-word is a confirmation aid, not required to connect */
+    }
+  }
+
   function addLine(cls, text) {
     const li = document.createElement("li");
     li.className = "line " + cls;
@@ -123,6 +138,7 @@
       $("room").disabled = true;
       $("pass").disabled = true;
       addLine("sys", `joined room "${room}" as ${window.SDZTransport.peerId.slice(0, 8)}`);
+      showSafeWord(passphrase, room);
     } catch (e) {
       setStatus("error", "Join failed: " + (e && e.message ? e.message : e));
     }
@@ -212,8 +228,10 @@
     if (!manualReady()) return;
     setStatus("connecting", "Creating offer code…");
     try {
-      $("m-offer-out").value = await window.SDZManual.createOffer(manualOpts());
+      const opts = manualOpts();
+      $("m-offer-out").value = await window.SDZManual.createOffer(opts);
       selectAll($("m-offer-out"));
+      showSafeWord(opts.passphrase, opts.room);
       addLine("sys", "offer created — send the code to the other person, then paste their answer below");
     } catch (e) {
       setStatus("error", "offer failed: " + (e && e.message ? e.message : e));
@@ -229,8 +247,10 @@
     }
     setStatus("connecting", "Making answer code…");
     try {
-      $("m-answer-out").value = await window.SDZManual.acceptOffer(offer, manualOpts());
+      const opts = manualOpts();
+      $("m-answer-out").value = await window.SDZManual.acceptOffer(offer, opts);
       selectAll($("m-answer-out"));
+      showSafeWord(opts.passphrase, opts.room);
       lockControls("answer created — send it back to Side A; you'll connect once they finish");
     } catch (e) {
       setStatus("error", "answer failed: " + (e && e.message ? e.message : e));

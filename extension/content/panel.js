@@ -75,6 +75,7 @@
         <button class="sdz-join" type="button">Join room</button>
       </div>
       <div class="sdz-status" data-mode="offline">Not connected — join the room to chat with other members.</div>
+      <div class="sdz-safeword" hidden></div>
 
       <div class="sdz-tools">
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
@@ -165,8 +166,26 @@
         join.textContent = "Joined";
       }
       if (passInput) passInput.disabled = true;
+      showSafeWord(passphrase, window.SDZTransport.room);
     } catch (e) {
       setStatus("error", "Could not join: " + (e && e.message ? e.message : e));
+    }
+  }
+
+  // The room "safe-word": everyone who joined the same meeting with the same
+  // passphrase sees the SAME emoji. If a member sees different emoji, they typed
+  // a different passphrase (otherwise that only shows up as silent "couldn't
+  // decrypt" messages). Members compare it out loud in the call.
+  async function showSafeWord(passphrase, room) {
+    try {
+      const fp = await window.SDZCrypto.roomFingerprint(passphrase, room);
+      const el = document.querySelector(`#${PANEL_ID} .sdz-safeword`);
+      if (!el) return;
+      el.textContent = "Room safe-word:  " + fp;
+      el.title = "Everyone in this room should see the SAME emoji. Different emoji = different passphrase.";
+      el.hidden = false;
+    } catch {
+      /* non-fatal — the safe-word is a confirmation aid, not required to connect */
     }
   }
 
