@@ -34,6 +34,8 @@
   let port = null;
   let key = null;
   let room = null;
+  let baseRoom = null; // the meeting-level room; breakout rooms derive from it
+  let passphraseSaved = null; // reused on switchRoom so breakouts inherit the room key input
   let onMessageCb = null;
   let onStatusCb = null;
   let joined = false;
@@ -48,11 +50,45 @@
     // roomOverride lets the dev test harness use a fixed room without a
     // /live/<id> URL. In production (content script) it derives from the URL.
     room = roomOverride || meetingId();
+    baseRoom = room;
+    passphraseSaved = passphrase || "";
     onMessageCb = onMessage;
     onStatusCb = onStatus;
     key = await window.SDZCrypto.deriveKey(passphrase || "", room);
     joined = true;
     connectSignaling();
+  }
+
+  // === Phase 10: breakout rooms ===
+  // A breakout is a DERIVED room: signaling room = base + "#b:" + name, and the
+  // crypto key re-derives with that salted room id (deriveKey binds room into
+  // the KDF), so breakout traffic is undecryptable to the main room and vice
+  // versa — a real mesh split, not a filter. Honest scope: breakouts are
+  // SEPARATION, not secrecy — every main-room member holds the same passphrase
+  // and can join any breakout, exactly like walking into a physical breakout
+  // room. suffix=null returns to the main room.
+  async function switchRoom({ suffix }) {
+    if (!joined) return false;
+    const nextRoom = suffix ? baseRoom + "#b:" + suffix : baseRoom;
+    if (nextRoom === room) return false;
+    // teardown: close every peer + the signaling port for the old room
+    peers.forEach((e) => {
+      try {
+        e.pc.close();
+      } catch {}
+    });
+    peers.clear();
+    if (port) {
+      try {
+        port.disconnect();
+      } catch {}
+      port = null;
+    }
+    room = nextRoom;
+    key = await window.SDZCrypto.deriveKey(passphraseSaved, room);
+    emitStatus({ state: "waiting" });
+    connectSignaling();
+    return true;
   }
 
   function connectSignaling() {
@@ -263,6 +299,7 @@
     init,
     send,
     sendFile,
+    switchRoom,
     attachManualPeer,
     get rtcConfig() {
       return RTC_CONFIG; // shared so the manual signaling path uses the same STUN config

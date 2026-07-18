@@ -455,6 +455,35 @@ function bytesEqual(a, b) {
     check("non-engage kinds not consumed", E.handleMessage({ kind: "text", body: "hi" }, "pA") === false);
   }
 
+  console.log("\nBreakout rooms (switchRoom derivation/teardown — live mesh re-join is browser-test-owed):");
+  {
+    // transport.js only touches chrome.runtime inside connectSignaling — a
+    // 4-method port stub makes init/switchRoom drivable headlessly.
+    globalThis.chrome = {
+      runtime: {
+        connect: () => ({
+          onMessage: { addListener() {} },
+          onDisconnect: { addListener() {} },
+          postMessage() {},
+          disconnect() {},
+        }),
+      },
+    };
+    const tSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transport.js"), "utf8");
+    vm.runInThisContext(tSrc, { filename: "transport.js" });
+    const T = globalThis.window.SDZTransport;
+    await T.init({ passphrase: "pw", room: "meet-1", onMessage() {}, onStatus() {} });
+    check("init joins base room", T.joined === true && T.room === "meet-1");
+    check("switchRoom derives salted breakout room", (await T.switchRoom({ suffix: "design" })) === true && T.room === "meet-1#b:design");
+    check("switch to the room you're in is a no-op", (await T.switchRoom({ suffix: "design" })) === false);
+    check("peers cleared on switch", T.count === 0);
+    check("suffix null returns to the main room", (await T.switchRoom({ suffix: null })) === true && T.room === "meet-1");
+
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    check("panel routes breakout-open with name validation", /case "breakout-open":/.test(panelSrc) && /BREAKOUT_NAME_RE/.test(panelSrc));
+    check("panel announces the door before leaving (breakout-open before switch)", /breakout-open", name \}\);\s*\n\s*switchToRoom\(name\)/.test(panelSrc));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

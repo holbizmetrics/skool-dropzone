@@ -82,6 +82,17 @@
         <button class="sdz-slide-toggle" type="button" title="Type a slide and present it">▤ Slide</button>
         <button class="sdz-tx-toggle" type="button" title="Live transcription (mic-based)">🎙 Transcript</button>
         <button class="sdz-poll-toggle" type="button" title="Start a poll">📊 Poll</button>
+        <button class="sdz-rooms-toggle" type="button" title="Breakout rooms">🚪 Rooms</button>
+      </div>
+
+      <div class="sdz-rooms" hidden>
+        <div class="sdz-rooms-current">In: <strong class="sdz-rooms-name">main room</strong></div>
+        <div class="sdz-rooms-list"></div>
+        <div class="sdz-rooms-create">
+          <input class="sdz-rooms-newname" type="text" maxlength="24" placeholder="new-breakout-name" autocomplete="off" />
+          <button class="sdz-rooms-createbtn sdz-btn" type="button">Create + join</button>
+        </div>
+        <div class="sdz-rooms-hint">Breakouts split the mesh, they don't add secrecy — anyone in the meeting can join any breakout (like walking into the room).</div>
       </div>
 
       <div class="sdz-reactions"></div>
@@ -138,8 +149,79 @@
     });
     wireSlideCompose(panel);
     wireEngage(panel);
+    wireRooms(panel);
 
     wireDragDrop(panel);
+  }
+
+  // === Phase 10: breakout rooms (transport.switchRoom does the mesh split) ===
+
+  const BREAKOUT_NAME_RE = /^[a-z0-9][a-z0-9-]{0,23}$/i;
+  const MAX_BREAKOUTS = 20;
+  const breakoutNames = new Set();
+  let currentBreakout = null; // null = main room
+
+  function wireRooms(panel) {
+    const toggle = panel.querySelector(".sdz-rooms-toggle");
+    const box = panel.querySelector(".sdz-rooms");
+    if (!toggle || !box) return;
+    toggle.addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      if (!box.hidden) renderRooms();
+    });
+    panel.querySelector(".sdz-rooms-createbtn").addEventListener("click", () => {
+      const input = panel.querySelector(".sdz-rooms-newname");
+      const name = (input.value || "").trim().toLowerCase();
+      if (!BREAKOUT_NAME_RE.test(name)) {
+        addMessage({ kind: "system", body: "Breakout names: letters/digits/dashes, max 24 chars." });
+        return;
+      }
+      if (breakoutNames.size >= MAX_BREAKOUTS && !breakoutNames.has(name)) {
+        addMessage({ kind: "system", body: "Breakout limit reached (20)." });
+        return;
+      }
+      input.value = "";
+      breakoutNames.add(name);
+      // announce on the CURRENT room before leaving it, so the room sees the door
+      if (connected && window.SDZTransport) window.SDZTransport.send({ kind: "breakout-open", name });
+      switchToRoom(name);
+    });
+  }
+
+  function renderRooms() {
+    const list = document.querySelector(`#${PANEL_ID} .sdz-rooms-list`);
+    const nameEl = document.querySelector(`#${PANEL_ID} .sdz-rooms-name`);
+    if (!list) return;
+    if (nameEl) nameEl.textContent = currentBreakout ? "breakout: " + currentBreakout : "main room";
+    list.innerHTML = "";
+    const mkBtn = (label, target) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sdz-btn sdz-rooms-item" + ((target === currentBreakout) ? " sdz-rooms-here" : "");
+      b.textContent = label;
+      b.disabled = target === currentBreakout;
+      b.addEventListener("click", () => switchToRoom(target));
+      list.appendChild(b);
+    };
+    mkBtn("🏠 Main room", null);
+    Array.from(breakoutNames).sort().forEach((n) => mkBtn("🚪 " + n, n));
+  }
+
+  async function switchToRoom(target) {
+    if (!connected || !window.SDZTransport || !window.SDZTransport.switchRoom) {
+      addMessage({ kind: "system", body: "Join the room first — breakouts split an existing connection." });
+      return;
+    }
+    if (target === currentBreakout) return;
+    const ok = await window.SDZTransport.switchRoom({ suffix: target });
+    if (!ok) return;
+    currentBreakout = target;
+    lastPeers = 0; // presence + whiteboard catch-up logic restart in the new mesh
+    addMessage({
+      kind: "system",
+      body: target ? `— moved to breakout "${target}" (chat/whiteboard/polls now stay in this room) —` : "— back in the main room —",
+    });
+    renderRooms();
   }
 
   // === transport / connection ===
@@ -260,6 +342,15 @@
       case "text":
         addMessage({ kind: "text", body: obj.body, mine: false, peer: fromPeer });
         break;
+      case "breakout-open": {
+        const bn = String(obj.name || "").toLowerCase();
+        if (!BREAKOUT_NAME_RE.test(bn) || (breakoutNames.size >= MAX_BREAKOUTS && !breakoutNames.has(bn))) break;
+        breakoutNames.add(bn);
+        addMessage({ kind: "system", body: `🚪 Breakout "${bn}" opened — join it via the Rooms button.` });
+        const roomsBox = document.querySelector(`#${PANEL_ID} .sdz-rooms`);
+        if (roomsBox && !roomsBox.hidden) renderRooms();
+        break;
+      }
       case "tx-status":
         // F2 consent visibility: transcription elsewhere in the room is
         // something YOUR speech may be feeding — always surfaced, never silent.
