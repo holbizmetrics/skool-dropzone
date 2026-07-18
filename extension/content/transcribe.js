@@ -244,5 +244,10 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
-  window.SDZTranscribe = { toggle };
+  window.SDZTranscribe = {
+    toggle,
+    get lines() {
+      return lines.slice(); // for the meeting archive
+    },
+  };
 })();

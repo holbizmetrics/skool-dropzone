@@ -83,6 +83,7 @@
         <button class="sdz-tx-toggle" type="button" title="Live transcription (mic-based)">🎙 Transcript</button>
         <button class="sdz-poll-toggle" type="button" title="Start a poll">📊 Poll</button>
         <button class="sdz-rooms-toggle" type="button" title="Breakout rooms">🚪 Rooms</button>
+        <button class="sdz-archive-btn" type="button" title="Save the whole meeting — chat, transcript, whiteboard, file list — as one HTML file">💾 Archive</button>
       </div>
 
       <div class="sdz-rooms" hidden>
@@ -147,6 +148,7 @@
     panel.querySelector(".sdz-tx-toggle").addEventListener("click", () => {
       if (window.SDZTranscribe) window.SDZTranscribe.toggle();
     });
+    panel.querySelector(".sdz-archive-btn").addEventListener("click", saveArchive);
     wireSlideCompose(panel);
     wireEngage(panel);
     wireRooms(panel);
@@ -867,6 +869,28 @@
       foot.appendChild(closeBtn);
     }
     li.appendChild(foot);
+  }
+
+  // === Phase 11: meeting archive (build logic in archive.js; collection here) ===
+
+  function saveArchive() {
+    if (!window.SDZArchive) return;
+    if (!messages.length && !(window.SDZTranscribe && window.SDZTranscribe.lines.length)) {
+      addMessage({ kind: "system", body: "Nothing to archive yet — the archive captures chat, transcript, whiteboard, and shared files." });
+      return;
+    }
+    const files = messages
+      .filter((m) => m.kind === "file" || m.kind === "file-progress")
+      .map((m) => ({ name: m.body, meta: m.meta || "" }));
+    const bytes = window.SDZArchive.save({
+      room: (window.SDZTransport && window.SDZTransport.room) || location.pathname,
+      generatedAt: Date.now(),
+      messages,
+      transcript: window.SDZTranscribe ? window.SDZTranscribe.lines : [],
+      whiteboardPng: window.SDZWhiteboard && window.SDZWhiteboard.snapshotPng ? window.SDZWhiteboard.snapshotPng() : null,
+      files,
+    });
+    addMessage({ kind: "system", body: `💾 Archive saved (${formatBytes(bytes)}) — one HTML file, opens anywhere, no expiry.` });
   }
 
   // === messages ===

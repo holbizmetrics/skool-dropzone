@@ -484,6 +484,38 @@ function bytesEqual(a, b) {
     check("panel announces the door before leaving (breakout-open before switch)", /breakout-open", name \}\);\s*\n\s*switchToRoom\(name\)/.test(panelSrc));
   }
 
+  console.log("\nMeeting archive (buildArchiveHtml — pure builder; download click is browser-test-owed):");
+  {
+    const aSrc = fs.readFileSync(path.join(__dirname, "..", "content", "archive.js"), "utf8");
+    vm.runInThisContext(aSrc, { filename: "archive.js" });
+    const A = globalThis.window.SDZArchive;
+    check("SDZArchive exposed with pure builder", !!A && typeof A.buildArchiveHtml === "function");
+
+    const html = A.buildArchiveHtml({
+      room: "meet-42",
+      generatedAt: 1789000000000,
+      messages: [
+        { kind: "text", body: "<script>alert(1)</script>", ts: 1789000000000, mine: false },
+        { kind: "file", body: "notes<img src=x onerror=alert(2)>.pdf", meta: "1.2 MB", ts: 1789000001000, mine: true },
+        { kind: "system", body: "A member connected (1 now in the room)." },
+      ],
+      transcript: [{ ts: 1789000002000, text: "hello \"quoted\" & <b>bold</b>" }],
+      whiteboardPng: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+      files: [{ name: "notes<img src=x onerror=alert(2)>.pdf", meta: "1.2 MB" }],
+    });
+    check("archive is a complete html document", /^<!doctype html>/.test(html) && /<\/html>>?\s*$/.test(html));
+    check("peer chat body is XSS-escaped", !html.includes("<script>alert(1)") && html.includes("&lt;script&gt;alert(1)"));
+    check("peer file name is XSS-escaped (both sections)", !html.includes("<img src=x onerror") && (html.match(/&lt;img src=x onerror/g) || []).length >= 2);
+    check("transcript text escaped", html.includes("&quot;quoted&quot; &amp; &lt;b&gt;bold&lt;/b&gt;"));
+    check("valid whiteboard dataURL embedded", html.includes('src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="'));
+    check("all sections present", html.includes("<h2>Chat</h2>") && html.includes("<h2>Transcript</h2>") && html.includes("<h2>Whiteboard</h2>") && html.includes("<h2>Files shared</h2>"));
+
+    const htmlBad = A.buildArchiveHtml({ room: "r", whiteboardPng: 'javascript:alert(1)" onload="x', messages: [{ kind: "text", body: "hi", ts: 1 }] });
+    check("non-PNG-dataURL whiteboard value rejected", !htmlBad.includes("javascript:alert") && !htmlBad.includes("<h2>Whiteboard</h2>"));
+    const htmlEmpty = A.buildArchiveHtml({ room: "r" });
+    check("empty sections omitted", !htmlEmpty.includes("<h2>Chat</h2>") && !htmlEmpty.includes("<h2>Transcript</h2>") && !htmlEmpty.includes("<h2>Files shared</h2>"));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

@@ -13,7 +13,10 @@ A Chrome extension, Skool-optimized, that injects a member-side meeting companio
 In one place:
 
 - **Chat with files** — type messages or drop pics, videos, files; same stream, everyone on the link sees it (the "drop zone" and the "chat" are one surface, not two)
-- **Whiteboard** — sketch together: colors, pen widths, eraser, per-gesture undo (Ctrl+Z, propagates to everyone), save the board as PNG
+- **Whiteboard** — sketch together: colors, pen widths, eraser, per-gesture undo (Ctrl+Z, propagates to everyone), save the board as PNG, late-joiner catch-up (join late, still see the board)
+- **Reactions & polls** — six-emoji reaction bursts; polls with live tally, one vote per member (re-vote replaces), only the poll's creator can close it
+- **Breakout rooms** — split into member-created side-rooms and back, chat/whiteboard/polls follow you. Honest scope: breakouts are *separation, not secrecy* — anyone in the meeting can walk into any room, exactly like physical breakouts
+- **Meeting archive** — one click saves chat, transcript, whiteboard snapshot, and the shared-file list as a single self-contained HTML file. Skool's own recordings expire after 14 days; this file is yours, offline, forever
 - **Video share** — share clips during the meeting
 - **Instant presentation** — anyone in the room can grab the presenter slot in one click. No "host promotes you," no screen-share dance. Three modes, stacked:
   - **File-as-deck** — drop a PDF / image / video, it takes over the shared view; you control pages or playback for everyone

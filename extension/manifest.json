@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.7.0",
-  "description": "Member-side companion for Skool meetings — chat-with-files + whiteboard + instant presentation (files & type-as-slides), all E2EE. Phase 7.",
+  "version": "0.8.0",
+  "description": "Member-side companion for Skool meetings — chat-with-files, whiteboard, instant presentation, polls & reactions, breakout rooms, one-click meeting archive; E2EE (mic-transcription v0 excepted and labeled). Phase 11.",
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],
-      "js": ["content/crypto.js", "content/transport.js", "content/manual-signal.js", "content/present.js", "content/whiteboard.js", "content/transcribe.js", "content/engage.js", "content/panel.js"],
+      "js": ["content/crypto.js", "content/transport.js", "content/manual-signal.js", "content/present.js", "content/whiteboard.js", "content/transcribe.js", "content/engage.js", "content/archive.js", "content/panel.js"],
       "css": ["content/panel.css", "content/present.css", "content/whiteboard.css"],
       "run_at": "document_idle",
       "all_frames": false

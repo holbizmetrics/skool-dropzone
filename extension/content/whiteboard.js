@@ -52,17 +52,21 @@
     canvas.height = window.innerHeight;
   }
 
+  function drawSegOn(c2d, w, h, s) {
+    c2d.globalCompositeOperation = s.eraser ? "destination-out" : "source-over";
+    c2d.strokeStyle = s.color;
+    c2d.lineWidth = s.width * (s.eraser ? 6 : 1);
+    c2d.lineCap = "round";
+    c2d.lineJoin = "round";
+    c2d.beginPath();
+    c2d.moveTo(s.x0 * w, s.y0 * h);
+    c2d.lineTo(s.x1 * w, s.y1 * h);
+    c2d.stroke();
+  }
+
   function drawSeg(s) {
     if (!ctx) return;
-    ctx.globalCompositeOperation = s.eraser ? "destination-out" : "source-over";
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = s.width * (s.eraser ? 6 : 1);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(s.x0 * canvas.width, s.y0 * canvas.height);
-    ctx.lineTo(s.x1 * canvas.width, s.y1 * canvas.height);
-    ctx.stroke();
+    drawSegOn(ctx, canvas.width, canvas.height, s);
   }
 
   function redraw() {
@@ -210,11 +214,11 @@
     broadcast({ kind: "wb-undo", path: pathId });
   }
 
-  function savePng() {
-    if (!canvas) return;
-    // Composite over white: the live canvas is transparent (it overlays the
-    // meeting), and eraser strokes are punched-out alpha — both read as white
-    // in the exported image.
+  // Composite over white: the live canvas is transparent (it overlays the
+  // meeting), and eraser strokes are punched-out alpha — both read as white
+  // in the exported image.
+  function compositeCanvas() {
+    if (!canvas) return null;
     const out = document.createElement("canvas");
     out.width = canvas.width;
     out.height = canvas.height;
@@ -222,6 +226,35 @@
     octx.fillStyle = "#ffffff";
     octx.fillRect(0, 0, out.width, out.height);
     octx.drawImage(canvas, 0, 0);
+    return out;
+  }
+
+  // For the meeting archive: board as a PNG dataURL (null when nothing drawn —
+  // the archive skips the section instead of embedding blank). Works with the
+  // overlay CLOSED too: strokes are normalized, so a drawn board replays onto
+  // an off-screen canvas at a default size.
+  function snapshotPng() {
+    if (strokes.length === 0) return null;
+    try {
+      let out = compositeCanvas();
+      if (!out) {
+        out = document.createElement("canvas");
+        out.width = 1280;
+        out.height = 720;
+        const octx = out.getContext("2d");
+        octx.fillStyle = "#ffffff";
+        octx.fillRect(0, 0, out.width, out.height);
+        strokes.forEach((s) => drawSegOn(octx, out.width, out.height, s));
+      }
+      return out.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
+  function savePng() {
+    const out = compositeCanvas();
+    if (!out) return;
     out.toBlob((blob) => {
       if (!blob) return;
       const a = document.createElement("a");
@@ -392,6 +425,7 @@
     handleMessage,
     requestSync,
     syncBatches,
+    snapshotPng,
     get active() {
       return !!overlay;
     },
