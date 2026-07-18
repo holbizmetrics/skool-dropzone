@@ -11,6 +11,10 @@
 //              it can be undone as a unit (older peers ignore the field)
 //   wb-undo  {path}                                          — remove one gesture
 //   wb-clear {}                                              — clear board
+//   wb-sync-req {}                                           — late joiner asks for board state
+//   wb-sync  {seq,total,strokes:[...]}                       — chunked reply (300 segs/frame);
+//                                                              accepted only while a request is
+//                                                              outstanding, first replier wins
 //
 // Public API (window.SDZWhiteboard):
 //   toggle(transport) / open(transport) / close()
@@ -286,6 +290,49 @@
   // not sender-bound; making clear owner-only is a product decision, see audit.)
   const MAX_STROKES = 5000;
 
+  // === late-joiner catch-up (wb-sync) ===
+  // The gap: strokes broadcast live, so whoever joins the mesh after drawing
+  // started sees an empty board forever. Fix: the late joiner REQUESTS state;
+  // any peer holding strokes replies in bounded chunks. Safety shape:
+  //  - acceptance is REQUEST-GATED (unsolicited wb-sync frames are ignored, so
+  //    no peer can push a board over yours uninvited)
+  //  - first replier wins (subsequent repliers' chunks are dropped — no merge,
+  //    no duplicate replay)
+  //  - only an EMPTY board requests (never clobbers local work)
+  //  - receive clamps: batch/total caps + the MAX_STROKES roll-off
+  const SYNC_BATCH = 300; // segments per wb-sync frame (stays under channel payload limits)
+  const SYNC_MAX_BATCHES = 20;
+  const SYNC_REQ_WINDOW_MS = 10000;
+  let syncRequested = false;
+  let syncDone = false;
+  let syncPeer = null; // first replier; others ignored
+  let syncTimer = null;
+
+  function requestSync() {
+    if (syncDone || syncRequested || strokes.length > 0) return false;
+    syncRequested = true;
+    syncPeer = null;
+    broadcast({ kind: "wb-sync-req" });
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncRequested = false; // nobody had a board (or nobody home) — stop listening
+    }, SYNC_REQ_WINDOW_MS);
+    return true;
+  }
+
+  function syncBatches() {
+    // Chunk the current board for a requester. Newest strokes matter most, so
+    // when over the batch budget send the most recent slice.
+    const budget = SYNC_BATCH * SYNC_MAX_BATCHES;
+    const src = strokes.length > budget ? strokes.slice(strokes.length - budget) : strokes;
+    const frames = [];
+    const total = Math.ceil(src.length / SYNC_BATCH);
+    for (let i = 0; i < total; i++) {
+      frames.push({ kind: "wb-sync", seq: i, total, strokes: src.slice(i * SYNC_BATCH, (i + 1) * SYNC_BATCH) });
+    }
+    return frames;
+  }
+
   function handleMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return false;
     if (obj.kind === "wb-stroke") {
@@ -311,6 +358,29 @@
       doClear();
       return true;
     }
+    if (obj.kind === "wb-sync-req") {
+      if (strokes.length > 0) syncBatches().forEach(broadcast);
+      return true;
+    }
+    if (obj.kind === "wb-sync") {
+      if (!syncRequested) return true; // unsolicited — never accept a pushed board
+      if (syncPeer === null) syncPeer = fromPeer || "peer-unknown";
+      if ((fromPeer || "peer-unknown") !== syncPeer) return true; // first replier wins
+      if (!Number.isInteger(obj.seq) || !Number.isInteger(obj.total)) return true;
+      if (obj.total < 1 || obj.total > SYNC_MAX_BATCHES || obj.seq < 0 || obj.seq >= obj.total) return true;
+      if (!Array.isArray(obj.strokes) || obj.strokes.length > SYNC_BATCH + 100) return true;
+      obj.strokes.forEach((s) => {
+        if (s && typeof s === "object") strokes.push(s);
+      });
+      if (strokes.length > MAX_STROKES) strokes.splice(0, strokes.length - MAX_STROKES);
+      if (obj.seq === obj.total - 1) {
+        syncRequested = false;
+        syncDone = true;
+        if (syncTimer) clearTimeout(syncTimer);
+      }
+      redraw();
+      return true;
+    }
     return false;
   }
 
@@ -320,6 +390,8 @@
     close,
     undo,
     handleMessage,
+    requestSync,
+    syncBatches,
     get active() {
       return !!overlay;
     },

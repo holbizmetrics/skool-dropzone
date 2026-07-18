@@ -221,6 +221,9 @@
       setStatus("error", "Signaling relay not reachable — is the local relay running? (npm start in /signaling)");
       return;
     }
+    // Late-joiner whiteboard catch-up: on FIRST peer contact, ask the room for
+    // board state (no-ops unless our board is empty — see whiteboard.js wb-sync).
+    if (lastPeers === 0 && n > 0 && window.SDZWhiteboard) window.SDZWhiteboard.requestSync();
     // Presence (Phase 3): announce members joining/leaving the mesh.
     if (n !== lastPeers) {
       if (n > lastPeers) addMessage({ kind: "system", body: `A member connected (${n} now in the room).` });

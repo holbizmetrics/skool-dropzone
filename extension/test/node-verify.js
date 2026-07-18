@@ -381,6 +381,33 @@ function bytesEqual(a, b) {
     WB.handleMessage({ kind: "wb-clear" });
   }
 
+  console.log("\nWhiteboard late-joiner sync (wb-sync request/response):");
+  {
+    const WB = globalThis.window.SDZWhiteboard;
+    const seg = (path, n) => ({ x0: 0.1, y0: 0.1, x1: 0.3, y1: 0.1 + n / 200, color: "#2563eb", width: 4, eraser: false, path });
+
+    // board is empty after the flood-cap test's wb-clear
+    check("empty board can request sync", WB.strokeCount === 0 && WB.requestSync() === true);
+    check("second request while outstanding is refused", WB.requestSync() === false);
+
+    // first replier wins; batches append
+    WB.handleMessage({ kind: "wb-sync", seq: 0, total: 2, strokes: [seg("p-s1", 1), seg("p-s1", 2)] }, "pA");
+    check("first sync batch accepted (2 segs)", WB.strokeCount === 2);
+    WB.handleMessage({ kind: "wb-sync", seq: 0, total: 1, strokes: [seg("p-x", 9)] }, "pB");
+    check("competing replier ignored (first wins)", WB.strokeCount === 2);
+    WB.handleMessage({ kind: "wb-sync", seq: 1, total: 2, strokes: [seg("p-s2", 3)] }, "pA");
+    check("final batch completes sync (3 segs)", WB.strokeCount === 3);
+    WB.handleMessage({ kind: "wb-sync", seq: 0, total: 1, strokes: [seg("p-evil", 6)] }, "pC");
+    check("unsolicited wb-sync after completion ignored", WB.strokeCount === 3);
+    check("request after successful sync refused (syncDone)", WB.requestSync() === false);
+
+    // reply side: batches chunk correctly
+    const frames = WB.syncBatches();
+    check("syncBatches chunks the board (1 frame, 3 segs)", frames.length === 1 && frames[0].kind === "wb-sync" && frames[0].total === 1 && frames[0].strokes.length === 3);
+    check("wb-sync-req with strokes present is consumed", WB.handleMessage({ kind: "wb-sync-req" }, "pD") === true);
+    WB.handleMessage({ kind: "wb-clear" });
+  }
+
   console.log("\nReactions + polls state machine (engage.js — DOM rendering is browser-test-owed):");
   {
     const engageSrc = fs.readFileSync(path.join(__dirname, "..", "content", "engage.js"), "utf8");
