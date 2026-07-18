@@ -80,6 +80,7 @@
       <div class="sdz-tools">
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
         <button class="sdz-slide-toggle" type="button" title="Type a slide and present it">▤ Slide</button>
+        <button class="sdz-tx-toggle" type="button" title="Live transcription (mic-based)">🎙 Transcript</button>
       </div>
 
       <div class="sdz-slide-compose" hidden>
@@ -119,6 +120,9 @@
     });
     panel.querySelector(".sdz-wb-toggle").addEventListener("click", () => {
       if (window.SDZWhiteboard) window.SDZWhiteboard.toggle(window.SDZTransport);
+    });
+    panel.querySelector(".sdz-tx-toggle").addEventListener("click", () => {
+      if (window.SDZTranscribe) window.SDZTranscribe.toggle();
     });
     wireSlideCompose(panel);
 

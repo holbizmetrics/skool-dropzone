@@ -51,3 +51,4 @@
 .sdz-wb-btn:hover { background: #1f2937; }
 .sdz-wb-btn.sdz-wb-active { background: #2563eb; border-color: #1d4ed8; color: #fff; }
 .sdz-wb-close { color: #fca5a5; }
+.sdz-wb-size { padding: 5px 8px; min-width: 28px; }

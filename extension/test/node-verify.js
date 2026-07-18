@@ -342,6 +342,32 @@ function bytesEqual(a, b) {
     check("decode rejects a wrong-type payload", throws(() => M.decodeConnectCode("SDZ1." + Buffer.from('{"v":1,"t":"nope","s":"x"}').toString("base64"))));
   }
 
+  console.log("\nWhiteboard wire protocol (stroke/undo/clear state machine — DOM rendering is browser-test-owed):");
+  {
+    // whiteboard.js touches the DOM only inside open()/toolbar code paths; the
+    // handleMessage state machine is guarded so state accumulates headlessly.
+    const wbSrc = fs.readFileSync(path.join(__dirname, "..", "content", "whiteboard.js"), "utf8");
+    vm.runInThisContext(wbSrc, { filename: "whiteboard.js" });
+    const WB = globalThis.window.SDZWhiteboard;
+    check("SDZWhiteboard exposed with handleMessage + undo", !!WB && typeof WB.handleMessage === "function" && typeof WB.undo === "function");
+
+    const seg = (path, n) => ({ x0: 0.1, y0: 0.1, x1: 0.2, y1: 0.2 + n / 100, color: "#ef4444", width: 4, eraser: false, path });
+    check("wb-stroke frames accumulate", WB.handleMessage({ kind: "wb-stroke", stroke: seg("p-aaa", 1) }) && WB.handleMessage({ kind: "wb-stroke", stroke: seg("p-aaa", 2) }) && WB.strokeCount === 2);
+    WB.handleMessage({ kind: "wb-stroke", stroke: seg("p-bbb", 3) });
+    check("malformed wb-stroke consumed but ignored", WB.handleMessage({ kind: "wb-stroke", stroke: "nope" }) && WB.strokeCount === 3);
+    check("wb-undo removes exactly that gesture's segments", WB.handleMessage({ kind: "wb-undo", path: "p-aaa" }) && WB.strokeCount === 1);
+    check("wb-undo for unknown path is a no-op", WB.handleMessage({ kind: "wb-undo", path: "p-zzz" }) && WB.strokeCount === 1);
+    check("malformed wb-undo consumed but ignored", WB.handleMessage({ kind: "wb-undo", path: 42 }) && WB.handleMessage({ kind: "wb-undo" }) && WB.strokeCount === 1);
+    check("undo() with no own gestures is a no-op", (WB.undo(), WB.strokeCount === 1));
+    check("wb-clear zeroes the board", WB.handleMessage({ kind: "wb-clear" }) && WB.strokeCount === 0);
+    check("non-wb kinds are not consumed", WB.handleMessage({ kind: "text", body: "hi" }) === false);
+
+    // Flood guard (SECURITY-AUDIT P1/P2): cap holds under a stroke flood.
+    for (let i = 0; i < 5100; i++) WB.handleMessage({ kind: "wb-stroke", stroke: seg("p-flood", i) });
+    check("stroke flood rolls off at the 5000 cap", WB.strokeCount === 5000);
+    WB.handleMessage({ kind: "wb-clear" });
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

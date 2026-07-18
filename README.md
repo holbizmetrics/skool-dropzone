@@ -13,13 +13,15 @@ A Chrome extension, Skool-optimized, that injects a member-side meeting companio
 In one place:
 
 - **Chat with files** — type messages or drop pics, videos, files; same stream, everyone on the link sees it (the "drop zone" and the "chat" are one surface, not two)
-- **Whiteboard** — sketch together
+- **Whiteboard** — sketch together: colors, pen widths, eraser, per-gesture undo (Ctrl+Z, propagates to everyone), save the board as PNG
 - **Video share** — share clips during the meeting
 - **Instant presentation** — anyone in the room can grab the presenter slot in one click. No "host promotes you," no screen-share dance. Three modes, stacked:
   - **File-as-deck** — drop a PDF / image / video, it takes over the shared view; you control pages or playback for everyone
   - **Type-as-slides** — type into chat, promote it to a slide everyone sees
   - **Bring-your-own-deck** — load existing slides (PPT / Keynote / PDF) into the overlay and walk through them
   - Whiteboard annotation works *over* whatever's being shown — sketch on top of slides, the PDF, the video frame
+
+- **Live transcription (v0, experimental — honest caveats below)** — a 🎙 panel section that transcribes the meeting via Chrome's built-in Web Speech API: live text, timestamped lines, English/Deutsch, download as `.txt`. Two things to know: it hears your **microphone** (your own speech reliably; other participants only via speakers, not headphones), and Chrome's recognizer streams that audio to **Google's speech service** — so this feature is explicitly *outside* the E2EE story below. The transcript itself never touches the room transport; it stays local unless you save it. Tab-audio capture with local (Whisper) transcription is the planned v2.
 
 Scope = whoever has *this* meeting link, *right now*. Ephemeral by default.
 
