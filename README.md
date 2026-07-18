@@ -22,6 +22,7 @@ In one place:
   - Whiteboard annotation works *over* whatever's being shown — sketch on top of slides, the PDF, the video frame
 
 - **Live transcription (v0, experimental — honest caveats below)** — a 🎙 panel section that transcribes the meeting via Chrome's built-in Web Speech API: live text, timestamped lines, English/Deutsch, download as `.txt`. Two things to know: it hears your **microphone** (your own speech reliably; other participants only via speakers, not headphones), and Chrome's recognizer streams that audio to **Google's speech service** — so this feature is explicitly *outside* the E2EE story below. The transcript itself never touches the room transport; it stays local unless you save it. Tab-audio capture with local (Whisper) transcription is the planned v2.
+  **Consent:** turning transcription on broadcasts a "🎙 transcription ON/OFF" notice to every panel in the room — other participants' speech may be reaching Google through *your* mic, and they get to see that, not just you. Get the room's OK before transcribing; in some jurisdictions (Germany among them) recording or processing others' spoken words without consent is legally sensitive — this note is a caution, not legal advice.
 
 Scope = whoever has *this* meeting link, *right now*. Ephemeral by default.
 

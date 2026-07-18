@@ -185,8 +185,17 @@
       const fp = await window.SDZCrypto.roomFingerprint(passphrase, room);
       const el = document.querySelector(`#${PANEL_ID} .sdz-safeword`);
       if (!el) return;
-      el.textContent = "Room safe-word:  " + fp;
-      el.title = "Everyone in this room should see the SAME emoji. Different emoji = different passphrase.";
+      if (!passphrase) {
+        // F3 (verification 2026-07-19): in convenience mode the emoji derive
+        // from the public meeting id — everyone (including the relay) gets the
+        // same ones, so matching emoji must NOT read as a privacy confirmation.
+        el.textContent = "Room check (no passphrase):  " + fp;
+        el.title =
+          "No passphrase set — these emoji only confirm you're in the same room. They say NOTHING about privacy: anyone with the link derives the same ones.";
+      } else {
+        el.textContent = "Room safe-word:  " + fp;
+        el.title = "Everyone in this room should see the SAME emoji. Different emoji = different passphrase.";
+      }
       el.hidden = false;
     } catch {
       /* non-fatal — the safe-word is a confirmation aid, not required to connect */
@@ -232,6 +241,16 @@
         break;
       case "text":
         addMessage({ kind: "text", body: obj.body, mine: false, peer: fromPeer });
+        break;
+      case "tx-status":
+        // F2 consent visibility: transcription elsewhere in the room is
+        // something YOUR speech may be feeding — always surfaced, never silent.
+        addMessage({
+          kind: "system",
+          body: obj.on
+            ? "🎙 A member turned transcription ON — speech their mic hears (possibly yours) may reach Google's speech service."
+            : "🎙 A member turned transcription OFF.",
+        });
         break;
       case "file-start":
         startIncoming(obj);

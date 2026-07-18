@@ -8,6 +8,11 @@
 //  - Chrome's recognizer streams the mic audio to Google's speech service.
 //    That is OUTSIDE the room's E2EE — the transcript itself never touches
 //    the transport, but the raw audio goes to Google. The UI says so.
+//  - F2 (SECURITY-AUDIT-VERIFICATION 2026-07-19): the ROOM must see it too,
+//    not just the operator running it — other participants' speech can reach
+//    Google via this feature. The ONLY thing that ever crosses the transport
+//    is a tiny tx-status on/off frame (consent visibility); transcript
+//    content never does.
 //  - Tab-audio capture of all participants (tabCapture + local Whisper) is
 //    the planned v2 and deliberately not attempted here.
 (() => {
@@ -74,11 +79,26 @@
     box.hidden = !box.hidden;
   }
 
+  // F2: tell the room. A participant whose speech may reach Google's
+  // recognizer deserves to see that it's happening — consent belongs to the
+  // room, not just the member who clicked Start.
+  function broadcastStatus(on) {
+    const t = window.SDZTransport;
+    if (t && t.joined) {
+      try {
+        t.send({ kind: "tx-status", on: !!on });
+      } catch {
+        /* status is best-effort; never blocks the feature */
+      }
+    }
+  }
+
   function onStartStop() {
     if (running) {
       running = false;
       stopRec();
       syncControls(ensureBox());
+      broadcastStatus(false);
     } else {
       if (!SR) {
         setInterim("Speech recognition not available in this browser (Chrome required).");
@@ -88,6 +108,7 @@
       if (!startedAt) startedAt = new Date();
       startRec();
       syncControls(ensureBox());
+      broadcastStatus(true);
     }
   }
 
@@ -116,6 +137,7 @@
         running = false;
         setInterim("Microphone access denied — allow the mic for skool.com and press Start again.");
         syncControls(ensureBox());
+        broadcastStatus(false); // the room saw ON; it must also see the stop
       } else if (ev.error === "network") {
         setInterim("Speech service unreachable (network) — retrying…");
       }

@@ -18,6 +18,21 @@ const PORT = process.env.PORT || 8080;
 // A bare { port } binds 0.0.0.0 / all interfaces (see SECURITY-AUDIT.md H1).
 // Override with HOST=0.0.0.0 ONLY behind a real room-admission check (production).
 const HOST = process.env.HOST || "127.0.0.1";
+// F1 (SECURITY-AUDIT-VERIFICATION 2026-07-19): the audit made client-side
+// admission (feat/h1-admission-handshake key-proof) MANDATORY before any
+// non-loopback relay. Narrative coupling drifts, so the coupling is mechanical:
+// a non-loopback bind refuses to start unless the operator explicitly asserts
+// the admission story with SDZ_PUBLIC_RELAY_ACK=h1-admission-merged. The env
+// value is deliberately the assertion itself, not "1" — you type what you claim.
+const LOOPBACK = /^(127\.|localhost$|::1$)/;
+if (!LOOPBACK.test(HOST) && process.env.SDZ_PUBLIC_RELAY_ACK !== "h1-admission-merged") {
+  console.error(
+    `[relay] REFUSED: HOST=${HOST} is not loopback. A public relay without peer admission ` +
+      `is the open-relay risk SECURITY-AUDIT.md H1 ranks HIGH. Merge feat/h1-admission-handshake ` +
+      `(key-proof admission), then start with SDZ_PUBLIC_RELAY_ACK=h1-admission-merged.`
+  );
+  process.exit(1);
+}
 // Relay hardening (SECURITY-AUDIT P3): bound resource use + reject impersonation.
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 500;
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS) || 50;

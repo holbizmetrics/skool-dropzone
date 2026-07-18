@@ -143,6 +143,30 @@ function client(peerId) {
     srv.kill();
   }
 
+  // F1 (verification 2026-07-19): a non-loopback bind must refuse to start
+  // without the explicit admission assertion — and start WITH it.
+  console.log("\nF1 public-bind refusal (mechanical audit coupling):");
+  {
+    const tryStart = (env) =>
+      new Promise((res) => {
+        const p = spawn(process.execPath, [path.join(__dirname, "server.js")], {
+          env: { ...process.env, PORT: String(PORT + 1), ...env },
+          stdio: ["ignore", "ignore", "ignore"],
+        });
+        const t = setTimeout(() => {
+          p.kill();
+          res("started"); // survived the window = it bound and ran
+        }, 900);
+        p.on("exit", (code) => {
+          clearTimeout(t);
+          res(code === 0 ? "clean-exit" : "refused");
+        });
+      });
+    check("HOST=0.0.0.0 without ack -> relay refuses to start", (await tryStart({ HOST: "0.0.0.0" })) === "refused");
+    check("HOST=0.0.0.0 with ack env -> relay starts", (await tryStart({ HOST: "0.0.0.0", SDZ_PUBLIC_RELAY_ACK: "h1-admission-merged" })) === "started");
+    check("loopback default still starts without any ack", (await tryStart({})) === "started");
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

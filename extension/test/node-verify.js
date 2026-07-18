@@ -342,6 +342,19 @@ function bytesEqual(a, b) {
     check("decode rejects a wrong-type payload", throws(() => M.decodeConnectCode("SDZ1." + Buffer.from('{"v":1,"t":"nope","s":"x"}').toString("base64"))));
   }
 
+  console.log("\nF2/F3 room-honesty contracts (verification 2026-07-19):");
+  {
+    const txSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transcribe.js"), "utf8");
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    // F2: transcription must broadcast its on/off status — and ONLY status
+    // (no transcript content path may reach the transport).
+    check("transcribe.js broadcasts tx-status on/off (F2)", /kind:\s*"tx-status"/.test(txSrc) && /broadcastStatus\(true\)/.test(txSrc) && /broadcastStatus\(false\)/.test(txSrc));
+    check("transcribe.js sends NO transcript content over transport (F2)", !/send\(\{[^}]*(body|text|transcript|line)/.test(txSrc));
+    check("panel.js renders incoming tx-status (F2)", /case "tx-status":/.test(panelSrc) && /transcription ON/.test(panelSrc));
+    // F3: convenience mode must not present the safe-word as a privacy signal.
+    check("safe-word relabeled in convenience mode (F3)", /Room check \(no passphrase\)/.test(panelSrc) && /NOTHING about privacy/.test(panelSrc));
+  }
+
   console.log("\nWhiteboard wire protocol (stroke/undo/clear state machine — DOM rendering is browser-test-owed):");
   {
     // whiteboard.js touches the DOM only inside open()/toolbar code paths; the
