@@ -381,6 +381,53 @@ function bytesEqual(a, b) {
     WB.handleMessage({ kind: "wb-clear" });
   }
 
+  console.log("\nReactions + polls state machine (engage.js — DOM rendering is browser-test-owed):");
+  {
+    const engageSrc = fs.readFileSync(path.join(__dirname, "..", "content", "engage.js"), "utf8");
+    vm.runInThisContext(engageSrc, { filename: "engage.js" });
+    const E = globalThis.window.SDZEngage;
+    const events = [];
+    E.onEvent = (ev) => events.push(ev);
+
+    check("SDZEngage exposed", !!E && typeof E.handleMessage === "function");
+
+    // reactions: allowlist in, junk out
+    check("allowlisted reaction emits event", E.handleMessage({ kind: "react", emoji: "🎉" }, "pA") && events.some((e) => e.type === "react" && e.emoji === "🎉"));
+    events.length = 0;
+    check("non-allowlisted reaction consumed but silent", E.handleMessage({ kind: "react", emoji: "<script>" }, "pA") && events.length === 0);
+
+    // own poll lifecycle
+    check("createPoll rejects 1 option", E.createPoll("Q?", ["only"]) === null);
+    check("createPoll rejects empty question", E.createPoll("  ", ["a", "b"]) === null);
+    const frame = E.createPoll("Lunch?", ["Pizza", "Sushi"]);
+    check("createPoll returns poll-start frame", !!frame && frame.kind === "poll-start" && frame.opts.length === 2);
+    const myId = frame.id;
+    check("own vote records + re-vote replaces (last wins)", (E.vote(myId, 0), E.vote(myId, 1), E.getPoll(myId).myVote === 1 && E.getPoll(myId).total === 1));
+
+    // remote poll + vote dedup
+    E.handleMessage({ kind: "poll-start", id: "poll-remote", q: "Color?", opts: ["Red", "Blue"] }, "pA");
+    check("remote poll-start registers (not mine)", E.getPoll("poll-remote") && E.getPoll("poll-remote").mine === false);
+    E.handleMessage({ kind: "poll-vote", id: "poll-remote", opt: 0 }, "pB");
+    E.handleMessage({ kind: "poll-vote", id: "poll-remote", opt: 1 }, "pB");
+    E.handleMessage({ kind: "poll-vote", id: "poll-remote", opt: 0 }, "pC");
+    const rp = E.getPoll("poll-remote");
+    check("per-peer vote dedup: 2 voters, pB re-vote replaced", rp.total === 2 && rp.counts[0] === 1 && rp.counts[1] === 1);
+    check("out-of-range vote ignored", E.handleMessage({ kind: "poll-vote", id: "poll-remote", opt: 9 }, "pD") && E.getPoll("poll-remote").total === 2);
+
+    // sender-bound close (the P1 present-close rule)
+    E.handleMessage({ kind: "poll-close", id: "poll-remote" }, "pB");
+    check("poll-close from NON-creator ignored", E.getPoll("poll-remote").open === true);
+    E.handleMessage({ kind: "poll-close", id: "poll-remote" }, "pA");
+    check("poll-close from creator closes", E.getPoll("poll-remote").open === false);
+    check("closePoll() on a foreign poll returns null", E.closePoll("poll-remote") === null);
+    check("closePoll() on own poll returns frame", (() => { const f = E.closePoll(myId); return !!f && f.kind === "poll-close" && f.id === myId; })());
+
+    // malformed / flood shapes
+    check("poll-start with 7 options ignored", E.handleMessage({ kind: "poll-start", id: "poll-x7", q: "Q", opts: ["1", "2", "3", "4", "5", "6", "7"] }, "pA") && !E.getPoll("poll-x7"));
+    check("duplicate poll id ignored", E.handleMessage({ kind: "poll-start", id: "poll-remote", q: "again?", opts: ["a", "b"] }, "pZ") && E.getPoll("poll-remote").q === "Color?");
+    check("non-engage kinds not consumed", E.handleMessage({ kind: "text", body: "hi" }, "pA") === false);
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

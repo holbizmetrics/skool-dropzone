@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],
-      "js": ["content/crypto.js", "content/transport.js", "content/manual-signal.js", "content/present.js", "content/whiteboard.js", "content/transcribe.js", "content/panel.js"],
+      "js": ["content/crypto.js", "content/transport.js", "content/manual-signal.js", "content/present.js", "content/whiteboard.js", "content/transcribe.js", "content/engage.js", "content/panel.js"],
       "css": ["content/panel.css", "content/present.css", "content/whiteboard.css"],
       "run_at": "document_idle",
       "all_frames": false

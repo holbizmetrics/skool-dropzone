@@ -81,6 +81,18 @@
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
         <button class="sdz-slide-toggle" type="button" title="Type a slide and present it">▤ Slide</button>
         <button class="sdz-tx-toggle" type="button" title="Live transcription (mic-based)">🎙 Transcript</button>
+        <button class="sdz-poll-toggle" type="button" title="Start a poll">📊 Poll</button>
+      </div>
+
+      <div class="sdz-reactions"></div>
+
+      <div class="sdz-poll-compose" hidden>
+        <input class="sdz-poll-q" type="text" maxlength="200" placeholder="Poll question" autocomplete="off" />
+        <textarea class="sdz-poll-opts" rows="3" maxlength="500" placeholder="One option per line (2–6 options)"></textarea>
+        <div class="sdz-poll-compose-actions">
+          <button class="sdz-poll-start" type="button">Start poll</button>
+          <button class="sdz-poll-cancel" type="button">Cancel</button>
+        </div>
       </div>
 
       <div class="sdz-slide-compose" hidden>
@@ -125,6 +137,7 @@
       if (window.SDZTranscribe) window.SDZTranscribe.toggle();
     });
     wireSlideCompose(panel);
+    wireEngage(panel);
 
     wireDragDrop(panel);
   }
@@ -232,9 +245,11 @@
 
   function onRemoteMessage(obj, fromPeer) {
     if (!obj || !obj.kind) return;
-    // Presentation (present-*) and whiteboard (wb-*) are handled by their modules.
+    // Presentation (present-*), whiteboard (wb-*), and reactions/polls
+    // (react/poll-*) are handled by their modules.
     if (window.SDZPresent && window.SDZPresent.handleMessage(obj, fromPeer)) return;
     if (window.SDZWhiteboard && window.SDZWhiteboard.handleMessage(obj, fromPeer)) return;
+    if (window.SDZEngage && window.SDZEngage.handleMessage(obj, fromPeer)) return;
     switch (obj.kind) {
       case "undecryptable":
         addMessage({ kind: "system", body: "A message arrived that couldn't be decrypted — passphrase mismatch?" });
@@ -618,6 +633,146 @@
 
   function linesOf(block) {
     return block.split("\n").map((l) => l.trim()).filter(Boolean);
+  }
+
+  // === Phase 9: reactions + polls (state machine in engage.js; render here) ===
+
+  function wireEngage(panel) {
+    const E = window.SDZEngage;
+    if (!E) return;
+
+    // reactions strip
+    const strip = panel.querySelector(".sdz-reactions");
+    if (strip) {
+      E.REACTIONS.forEach((emoji) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "sdz-react-btn";
+        b.textContent = emoji;
+        b.title = "Send a reaction";
+        b.addEventListener("click", () => {
+          floatEmoji(emoji); // own feedback immediately
+          if (connected && window.SDZTransport) window.SDZTransport.send({ kind: "react", emoji });
+        });
+        strip.appendChild(b);
+      });
+    }
+
+    // poll compose
+    const box = panel.querySelector(".sdz-poll-compose");
+    const toggle = panel.querySelector(".sdz-poll-toggle");
+    const qIn = panel.querySelector(".sdz-poll-q");
+    const optsIn = panel.querySelector(".sdz-poll-opts");
+    if (toggle && box) {
+      toggle.addEventListener("click", () => {
+        box.hidden = !box.hidden;
+        if (!box.hidden) setTimeout(() => qIn && qIn.focus(), 30);
+      });
+      panel.querySelector(".sdz-poll-cancel").addEventListener("click", () => {
+        box.hidden = true;
+      });
+      panel.querySelector(".sdz-poll-start").addEventListener("click", () => {
+        const opts = (optsIn.value || "").split("\n").map((l) => l.trim()).filter(Boolean);
+        const frame = E.createPoll(qIn.value, opts);
+        if (!frame) {
+          addMessage({ kind: "system", body: "Poll needs a question and 2–6 options." });
+          return;
+        }
+        if (connected && window.SDZTransport) window.SDZTransport.send(frame);
+        else addMessage({ kind: "system", body: "Poll is local-only — join the room to let others vote." });
+        qIn.value = "";
+        optsIn.value = "";
+        box.hidden = true;
+      });
+    }
+
+    E.onEvent = (ev) => {
+      if (ev.type === "react") return floatEmoji(ev.emoji);
+      if (ev.type === "poll-new") return addPollCard(ev.poll);
+      if (ev.type === "poll-update" || ev.type === "poll-closed") return updatePollCard(ev.poll);
+    };
+  }
+
+  function floatEmoji(emoji) {
+    const host = document.getElementById(HOST_ID);
+    if (!host) return;
+    const span = document.createElement("span");
+    span.className = "sdz-react-float";
+    span.textContent = emoji;
+    span.style.right = 40 + Math.random() * 120 + "px";
+    host.appendChild(span);
+    span.addEventListener("animationend", () => span.remove());
+    setTimeout(() => span.remove(), 3000); // belt: never leak nodes
+  }
+
+  function addPollCard(poll) {
+    const list = document.querySelector(`#${PANEL_ID} .sdz-messages`);
+    if (!list || document.getElementById("sdz-poll-" + poll.id)) return;
+    const li = document.createElement("li");
+    li.className = "sdz-msg sdz-msg-poll" + (poll.mine ? " sdz-msg-mine" : "");
+    li.id = "sdz-poll-" + poll.id;
+    renderPollInto(li, poll);
+    list.appendChild(li);
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function updatePollCard(poll) {
+    const li = document.getElementById("sdz-poll-" + poll.id);
+    if (li) renderPollInto(li, poll);
+  }
+
+  function renderPollInto(li, poll) {
+    li.innerHTML = "";
+    const q = document.createElement("div");
+    q.className = "sdz-poll-question";
+    q.textContent = "📊 " + poll.q + (poll.open ? "" : " (closed)");
+    li.appendChild(q);
+
+    const max = Math.max(1, ...poll.counts);
+    poll.opts.forEach((opt, i) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className =
+        "sdz-poll-opt" +
+        (poll.myVote === i ? " sdz-poll-voted" : "") +
+        (!poll.open && poll.counts[i] === max && poll.total > 0 ? " sdz-poll-winner" : "");
+      row.disabled = !poll.open;
+      const bar = document.createElement("span");
+      bar.className = "sdz-poll-bar";
+      bar.style.width = Math.round((100 * poll.counts[i]) / max) + "%";
+      const label = document.createElement("span");
+      label.className = "sdz-poll-opt-label";
+      label.textContent = opt;
+      const n = document.createElement("span");
+      n.className = "sdz-poll-count";
+      n.textContent = String(poll.counts[i]);
+      row.appendChild(bar);
+      row.appendChild(label);
+      row.appendChild(n);
+      row.addEventListener("click", () => {
+        const frame = window.SDZEngage.vote(poll.id, i);
+        if (frame && connected && window.SDZTransport) window.SDZTransport.send(frame);
+      });
+      li.appendChild(row);
+    });
+
+    const foot = document.createElement("div");
+    foot.className = "sdz-poll-foot";
+    const total = document.createElement("span");
+    total.textContent = `${poll.total} vote${poll.total === 1 ? "" : "s"}`;
+    foot.appendChild(total);
+    if (poll.mine && poll.open) {
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "sdz-btn";
+      closeBtn.textContent = "Close poll";
+      closeBtn.addEventListener("click", () => {
+        const frame = window.SDZEngage.closePoll(poll.id);
+        if (frame && connected && window.SDZTransport) window.SDZTransport.send(frame);
+      });
+      foot.appendChild(closeBtn);
+    }
+    li.appendChild(foot);
   }
 
   // === messages ===
