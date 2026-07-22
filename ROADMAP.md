@@ -327,3 +327,25 @@ Two fix directions, pick deliberately:
 Either way the standing rule this exposes: **no text element may rely on an inherited or UA
 default colour.** That is what made the failure selective and invisible to review — it only shows
 up on a machine where something else decides the scheme.
+
+**U6 — whiteboard opens with no visibly-selected colour, and (reported) does not draw until one
+is clicked.** Two claims, deliberately separated by how well each is grounded.
+
+*PROVEN (code-read, one-line fix):* `markActive(tb)` is invoked only from the three toolbar click
+handlers (`whiteboard.js:128,147,157`) and **never after the toolbar is built**. On open, no swatch
+carries `.sdz-wb-active`, so the toolbar presents as "nothing selected" and the user reasonably
+concludes they must pick a colour before drawing. Fix: call `markActive(tb)` once at the end of
+toolbar construction so the initial state (`color = "#ef4444"`, default width, eraser off) is
+reflected in the UI it already holds internally.
+
+*REPORTED, NOT YET EXPLAINED:* the operator states drawing did **nothing at all** until a swatch
+was clicked. The internal state says it should have drawn red immediately, so the missing highlight
+does NOT account for this — there is a second cause. Do not close U6 on the one-liner alone.
+Repro candidates to test in this order: (a) canvas size/DPR initialised late, so early strokes land
+outside the visible bitmap; (b) an overlay (panel host / meeting DOM) swallowing the first pointer
+sequence until a click elsewhere focuses the canvas; (c) `open()` ordering — strokes recorded before
+the transport/room is ready being dropped rather than drawn locally.
+
+*Class:* a first-interaction dead spot. Whatever the cause, the user-visible verdict is "the
+whiteboard is broken," which is the most expensive possible first impression for the feature this
+project leads with. Worth fixing before U5's new tools, since new tools inherit the same entry path.
