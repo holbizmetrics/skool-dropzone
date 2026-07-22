@@ -302,3 +302,28 @@ Minimum useful set, in the order that pays off fastest for a live meeting: **tex
 the most requested — you cannot annotate a diagram without it), **arrow**, **rectangle/ellipse**,
 **straight line**, then **select + move/delete**. Sticky-note is text + rect and comes free once
 both exist.
+
+**U3 — ROOT CAUSE FOUND (amends the contrast entry above; 2026-07-22, live).** This is not a
+palette-taste problem, it is **an unintended dark inversion of a light-only design**.
+
+`panel.css:38` declares the panel root `background: #ffffff` and the whole stylesheet is a light
+palette (`.sdz-msg-poll` `#f9fafb`, `.sdz-poll-opt` `background:#fff`). The operator's live panel
+renders **dark**. So the browser/page is inverting it (Chrome auto-dark-mode, or inheritance from
+Skool's dark shell), and the inversion is **partial**: backgrounds flip, text rules do not.
+
+The poll widget is the proof and the worst casualty: **option labels are white-on-white — invisible
+until the blue selection bar reveals them**, which makes a poll unusable (a voter cannot read the
+options). Meanwhile the vote counts ARE readable, because `.sdz-poll-count` is the one rule that
+sets an explicit `color: #6b7280`. Every element with an explicit color survived the inversion;
+every element relying on a default did not. `.sdz-poll-opt` / `.sdz-poll-opt-label` set none.
+
+Two fix directions, pick deliberately:
+- **Cheap + immediate:** declare `color-scheme: only light` on the panel host so the UA stops
+  auto-darkening it, and the design renders as authored. One line; verify in the dark Skool shell.
+- **Proper:** author a real dark theme — every text element gets an explicit `color`, tested at
+  WCAG AA (4.5:1) in BOTH shells. More work, and the right answer if the panel should look native
+  inside a dark meeting.
+
+Either way the standing rule this exposes: **no text element may rely on an inherited or UA
+default colour.** That is what made the failure selective and invisible to review — it only shows
+up on a machine where something else decides the scheme.
