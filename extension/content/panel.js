@@ -65,7 +65,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.7.0</span>
+          <span class="sdz-version">v0.8.0</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
