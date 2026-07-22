@@ -419,3 +419,38 @@ a transcript that confidently misattributes a quote is worse than one that says 
 
 *Ordering:* ship the focus-attribution slice first; promote to per-speaker audio capture only if
 the approximation proves too coarse in real meetings. The cheap version may simply be enough.
+
+## U8 — Participant roster as a first-class object ("do anything by name")
+
+*Operator, 2026-07-22: "imagine we could do anything by name — for example copy the name list of
+all participants, easy to do when the meeting is on, right?" Correct: the display names are already
+rendered in the meeting DOM (one per tile) and the panel already runs a MutationObserver over it.*
+
+**Cheapest useful version (minutes, not days):** a `Copy participants` button — read the tile
+labels, dedupe, emit a newline list to the clipboard. Also: `.csv` with a timestamp, and an
+attendance line in the meeting archive.
+
+**The reason to build the roster instead of just the button:** almost every other feature on this
+list wants "who is here, by name," and today each would re-scrape the DOM separately.
+
+| Consumer | What the roster gives it |
+|---|---|
+| U2 transcript attribution | the name to stamp on a segment (focus tile → roster entry) |
+| Meeting archive | attendance list + join/leave times, alongside the existing content |
+| Chat | @-mention autocomplete, "message this person" |
+| Breakouts | assign/split by name instead of everyone self-navigating |
+| Polls | optional named results where the room wants accountability (opt-in — see bounds) |
+| Reactions | "3 people reacted" → *who* reacted |
+
+**Shape:** one module owning a live `Map<tileId, {name, joinedAt, leftAt, focused}>`, maintained by
+the existing observer, emitting change events. Everything else consumes it; nothing else scrapes.
+
+**Honest bounds:**
+- These are **display names as Skool renders them**, not verified identities — two "Matthew"s are
+  indistinguishable, and a name is not an authentication. Never bind a permission or a
+  cryptographic claim to a roster entry; the room passphrase remains the only trust boundary.
+- The roster depends on Skool's DOM structure and will break when they restyle. Keep the selector
+  in one place with a loud fallback ("roster unavailable") rather than silently emitting an empty
+  or partial list — a *partial* attendance list is worse than none.
+- An attendance list is personal data. Default to **local-only**, never auto-broadcast to the room
+  or into an archive without an explicit action; say so in the panel.
