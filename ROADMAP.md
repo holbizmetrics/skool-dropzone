@@ -349,3 +349,49 @@ the transport/room is ready being dropped rather than drawn locally.
 *Class:* a first-interaction dead spot. Whatever the cause, the user-visible verdict is "the
 whiteboard is broken," which is the most expensive possible first impression for the feature this
 project leads with. Worth fixing before U5's new tools, since new tools inherit the same entry path.
+
+## U7 — Region capture + OCR ("grab any part of the meeting, including the text inside graphics")
+
+*Operator idea, 2026-07-22, live: drag-select any region of the meeting — a shared slide, a code
+snippet someone is presenting, a diagram — and either capture it as an image OR **pull the text out
+of it**, even when that text is baked into a graphic. Snagit's grab-text, but inside the meeting.*
+
+**This is the strongest differentiator proposed so far.** Zoom/Meet/Skool all make you screenshot
+and re-type. The thing a participant actually wants — *the code on that slide, in my clipboard* —
+nobody ships. It also composes with what already exists rather than standing alone.
+
+**Why it is technically reachable (the load-bearing fact):** a remote participant's camera and
+**screen share both arrive as `<video>` elements in the meeting DOM**, backed by a WebRTC
+MediaStream. Drawing a MediaStream-backed video into a canvas **does NOT taint the canvas** (unlike
+a cross-origin `<img>`), so `ctx.drawImage(videoEl, …)` followed by `getImageData()` /
+`toDataURL()` works from a content script with no extra permission and no cooperation from Skool.
+That single fact is what makes region capture possible at all; verify it first with a 10-line spike
+against a live share before designing anything else.
+
+**Shape:**
+1. **Region select** — transparent overlay across the meeting area, drag a rect (reuse the
+   whiteboard's pointer handling; it already does normalized coords + DPR).
+2. **Resolve source** — hit-test which `<video>` (or DOM region) the rect covers; for a screen
+   share, map viewport rect → source-video coordinates so the crop is at the SHARE's native
+   resolution, not the scaled-down tile. This is the difference between usable OCR and mush.
+3. **Capture** — crop to an offscreen canvas → PNG.
+4. **OCR — local, not cloud.** `Tesseract.js` (WASM) runs entirely on-device. **Cloud OCR is the
+   wrong answer here**: this product's whole claim is E2EE, and the transcription feature already
+   had to be labeled "audio goes to Google (not E2EE)". Do not add a second privacy asterisk to
+   the feature list. Cost of local: ~2–4 MB WASM + a language model (use the `fast` eng traineddata),
+   lazy-loaded on first use, not at extension install.
+5. **Destinations** — clipboard (text and/or image), the **whiteboard as a text object** (needs
+   U5's object model — natural pairing), the chat, and the **meeting archive** (`archive.js` already
+   accepts a PNG data URL for the whiteboard, so the plumbing shape exists).
+
+**Honest bounds to state in the UI, not hide:**
+- OCR quality tracks source resolution. A downscaled 720p tile of someone's IDE will produce
+  mediocre text; capturing from the share's native track (step 2) is what makes it good.
+- Best-effort, never silent: show the OCR result for correction before it lands anywhere. Wrong
+  text pasted confidently into a whiteboard is worse than no text.
+- **Consent posture:** capturing what a presenter chose to show is what every screenshot already
+  does, but OCR-at-scale plus archiving is a different posture from a one-off screenshot. Decide
+  deliberately whether captures are local-only by default, and say so in the panel.
+
+**Ordering note:** the capture half (1–3, clipboard image) is a self-contained slice and useful
+immediately. OCR (4) is a second slice. Whiteboard-text destination waits on U5's object model.
