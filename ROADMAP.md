@@ -395,3 +395,27 @@ against a live share before designing anything else.
 
 **Ordering note:** the capture half (1–3, clipboard image) is a self-contained slice and useful
 immediately. OCR (4) is a second slice. Whiteboard-text destination waits on U5's object model.
+
+**U2 — AMENDED (operator, same evening): there is a much cheaper first slice.** The entry above
+specs per-speaker *audio* capture (`captureStream()` per participant `<audio>` element). That is
+the accurate-but-expensive version. The operator's framing yields a **slice that needs no new audio
+plumbing at all**:
+
+> keep the single mic stream exactly as it is, and label each transcript segment with the name on
+> the tile that currently holds the **active-speaker focus** (the yellow highlight Skool already
+> renders).
+
+Implementation is DOM-only: watch the focused tile (the same MutationObserver `panel.js` already
+runs), read its display name, and stamp it onto each recognition result as it arrives. Local user's
+own segments attribute to "You" when the local mic is the source. Roughly an afternoon, versus a
+multi-day audio-plumbing job — and it produces the thing that actually matters: **a transcript that
+says who said what.**
+
+*Honest bounds, to show in the transcript rather than hide:* focus indicators lag and flap, so
+attribution is approximate at speaker changes; overlapping speech will misattribute to whoever the
+UI happened to highlight; and anyone on headphones is still inaudible to a mic-based capture (the
+original limitation, unchanged). Mark uncertain segments rather than asserting a name confidently —
+a transcript that confidently misattributes a quote is worse than one that says "(speaker unclear)".
+
+*Ordering:* ship the focus-attribution slice first; promote to per-speaker audio capture only if
+the approximation proves too coarse in real meetings. The cheap version may simply be enough.
