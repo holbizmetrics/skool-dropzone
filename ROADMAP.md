@@ -237,3 +237,49 @@ These don't block any single phase but need decisions before Phase 8:
 Each phase is sized to a session or two for someone working on this as a side-project. Critical-path-only path to the killer feature: **Phase 0 → 1 → 2 → 3 → 4 → 5**. Whiteboard and the remaining presentation modes come after the spine works.
 
 Suggested first sit-down: Phase 0 (scaffolding) end-to-end in one go. It's load-bearing and unlocks everything else.
+
+---
+
+## Field-observed UX backlog (2026-07-22, operator in a live Skool meeting, v0.8 on `feat/hosted-relay`)
+
+Found by actually using the panel in a real 8-person meeting — not by review. All three
+are pre-conditions for showing this to anyone else.
+
+**U1 — the panel is clipped at the right edge.** The tab row cuts off after `Rooms`
+(at least one tab unreachable) and the message composer at the bottom is half-cropped.
+Fix direction: the panel host has a fixed width but its children overflow; the tab strip
+needs to wrap or scroll, and the composer needs to sit inside the panel's box rather than
+past it. Verify at several viewport widths + browser zoom levels, not just the author's.
+
+**U2 — transcription should be per-speaker, not one mic blob.** Today it is mic-only:
+one undifferentiated stream of whatever the microphone picks up, so in a real meeting it
+mixes every audible participant with no attribution and misses anyone on headphones.
+Expected behavior (operator, watching it live): transcribe **the focused speaker** — the
+tile Skool highlights — labeled by their display name, **and** the local user, as separate
+attributed lines. Technical path that does not need Skool's cooperation: each remote
+participant renders an `<audio>` element in the meeting DOM; `HTMLMediaElement.captureStream()`
+per element yields separate tracks that can be fed to recognition individually, and the
+focused-tile selector already exists in `panel.js` (`.str-video__call-controls` neighbourhood).
+Honest bounds to keep: recognition still goes to Google (already labeled not-E2EE), and
+per-speaker capture makes that MORE explicit, not less — the consent line must be updated
+in the same change.
+
+**U3 — contrast: black text on grey boxes is unreadable.** Worst offenders seen live: the
+poll widget (options + vote counts) and the disabled/placeholder input fields. This is an
+accessibility defect, not a preference. Fix with a checked contrast ratio (WCAG AA, 4.5:1
+for body text) rather than by eye, and check it in both the light Skool shell and the dark
+meeting shell — the panel currently inherits from neither consistently.
+
+*Provenance: operator ran v0.8 live during a Skool "Show & Tell" meeting, 2026-07-22, after
+the fresh clone landed on `master` (pre-v0.8) and needed a branch switch + a tab reload +
+`npm install` in `signaling/` before the panel would connect at all. That setup friction is
+its own finding — see U4.*
+
+**U4 — first-run friction on a fresh clone.** Three separate stalls before the panel worked:
+(a) `git clone` lands on `master`, which is 11 commits behind `feat/hosted-relay` where all
+v0.8 features live — a fresh clone silently gets an old build; (b) content scripts do not
+inject into tabs already open at install time, so the panel appears dead until the meeting tab
+is reloaded; (c) `signaling/node_modules` is absent on a fresh clone, so the relay cannot start
+and the panel reports "Signaling relay not reachable" with no hint that `npm install` is the
+missing step. Fix direction: merge `feat/hosted-relay` (or repoint the default branch), and make
+the relay error message name the two-step fix (`cd signaling && npm install && npm start`).
