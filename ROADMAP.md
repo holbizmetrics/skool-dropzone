@@ -283,3 +283,22 @@ is reloaded; (c) `signaling/node_modules` is absent on a fresh clone, so the rel
 and the panel reports "Signaling relay not reachable" with no hint that `npm install` is the
 missing step. Fix direction: merge `feat/hosted-relay` (or repoint the default branch), and make
 the relay error message name the two-step fix (`cd signaling && npm install && npm start`).
+
+**U5 — whiteboard needs real tools: text, shapes, and the rest.** Today it is freehand-only:
+the wire carries line segments (`{x0,y0,x1,y1,color,width,eraser,path}`) and nothing else, so
+anything that is not a hand-drawn squiggle is impossible — no text labels, no rectangle/ellipse/
+arrow, no straight line, no select/move/delete of an existing object.
+
+**The load-bearing consequence: this is a wire-format change, not a toolbar change.** Segments
+are anonymous and append-only; text and shapes are *objects* with identity, position and
+editable properties. Adding them means introducing a typed object model on the wire
+(`{type: "text"|"rect"|"ellipse"|"arrow"|"line"|"path", id, ...props}`) — which then has to stay
+compatible with the two mechanisms already built on the segment stream: **per-gesture wire undo**
+(undo must remove an object, not N segments) and **late-joiner `wb-sync`** (the catch-up replay
+must reconstruct objects, not just repaint strokes). Do the format first, then the tools; doing
+tools first means doing the format twice.
+
+Minimum useful set, in the order that pays off fastest for a live meeting: **text label** (by far
+the most requested — you cannot annotate a diagram without it), **arrow**, **rectangle/ellipse**,
+**straight line**, then **select + move/delete**. Sticky-note is text + rect and comes free once
+both exist.
