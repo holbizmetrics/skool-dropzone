@@ -454,3 +454,19 @@ the existing observer, emitting change events. Everything else consumes it; noth
   or partial list — a *partial* attendance list is worse than none.
 - An attendance list is personal data. Default to **local-only**, never auto-broadcast to the room
   or into an archive without an explicit action; say so in the panel.
+
+**U9 — let the panel dock left or right (and remember it).** Today it is hard-pinned:
+`panel.css:38` sets `position: fixed; top: 0; right: 0; width: 360px`. Some users want it on the
+left — partly taste, partly because the right edge is where Skool puts its own controls and where
+the participant strip crowds, so the free side differs per layout and per screen width.
+
+Small change, done properly: an `sdz-dock-left` / `sdz-dock-right` class on the host (flip
+`right:0` ↔ `left:0` and mirror the border/shadow side), a toggle in the panel header, and the
+choice persisted in `chrome.storage.sync` so it survives reloads and follows the user across
+machines. While in there, persist **width** too — the same preference store makes the panel
+resizable for free, which is the real fix path for U1's clipping rather than a one-off width bump.
+
+*Watch for:* the whiteboard and region-capture overlays position relative to the meeting area, so
+anything that assumes "the panel is on the right" (offsets, hit-testing, the U7 capture rect) must
+read the dock side from one source of truth rather than hard-coding it — otherwise docking left
+silently breaks capture alignment.
