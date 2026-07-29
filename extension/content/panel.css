@@ -14,17 +14,20 @@
   right: 12px;
   bottom: 12px;
   z-index: 2147483646;
-  background: #1f2937;
+  /* Blue + full opacity: a dark translucent chip was invisible on Skool's
+     near-black meeting UI — "how do I get the panel back?" is a bug, not a
+     user error. Blue = the same accent the active state already uses. */
+  background: #2563eb;
   color: #fff;
   font: 600 11px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
   letter-spacing: 0.08em;
   padding: 7px 10px;
   border-radius: 6px;
-  border: 1px solid #374151;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid #60a5fa;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   user-select: none;
   cursor: pointer;
-  opacity: 0.85;
+  opacity: 1;
   transition: opacity 120ms ease, transform 120ms ease;
 }
 #skool-dropzone-marker:hover { opacity: 1; }
@@ -167,6 +170,7 @@
 
 #skool-dropzone-panel .sdz-tools {
   display: flex;
+  flex-wrap: wrap; /* six tools don't fit 360px on one line — Archive was clipped off the edge */
   gap: 6px;
   padding: 8px 12px;
   border-bottom: 1px solid #e5e7eb;
@@ -509,6 +513,12 @@
   background: #fff;
 }
 #skool-dropzone-panel .sdz-tx-download { margin-left: auto; }
+#skool-dropzone-panel .sdz-tx-state {
+  font: 600 11px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  white-space: nowrap;
+}
+#skool-dropzone-panel .sdz-tx-state[data-state="live"] { color: #16a34a; }
+#skool-dropzone-panel .sdz-tx-state[data-state="retrying"] { color: #d97706; }
 #skool-dropzone-panel .sdz-tx-note {
   font-size: 11px;
   line-height: 1.35;

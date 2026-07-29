@@ -484,6 +484,38 @@ function bytesEqual(a, b) {
     check("panel announces the door before leaving (breakout-open before switch)", /breakout-open", name \}\);\s*\n\s*switchToRoom\(name\)/.test(panelSrc));
   }
 
+  console.log("\nRe-mount seam (v0.8.1 — DOM wipe must not show a dead join screen over a live mesh):");
+  {
+    const panelSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const txSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transcribe.js"), "utf8");
+    // The observer/popstate paths must go through the named seam, not inline ensureHost.
+    check("MutationObserver path uses remountHost seam", /new MutationObserver\(\(\) => \{\s*\n\s*remountHost\(\);/.test(panelSrc));
+    check("popstate path uses remountHost seam", /addEventListener\("popstate", \(\) => \{\s*\n\s*remountHost\(\);/.test(panelSrc));
+    // The seam must restore connection UI + transcript, not just re-render messages.
+    check("remountHost restores connection UI", /function remountHost\(\)[\s\S]{0,400}restoreConnectionUi\(\)/.test(panelSrc));
+    check("remountHost restores transcript box", /function remountHost\(\)[\s\S]{0,500}SDZTranscribe\.remount/.test(panelSrc));
+    // Restored UI must show the joined state (locked passphrase, "Joined" button).
+    check("restoreConnectionUi locks passphrase + shows Joined", /function restoreConnectionUi\(\)[\s\S]{0,600}join\.textContent = "Joined"/.test(panelSrc) && /function restoreConnectionUi\(\)[\s\S]{0,600}pass\.disabled = true/.test(panelSrc));
+    check("restoreConnectionUi no-ops when not connected", /function restoreConnectionUi\(\) \{\s*\n\s*if \(!connected\) return;/.test(panelSrc));
+    // Transcript side: remount exported, visibility survives, lines-only state still restores.
+    check("transcribe exports remount", /window\.SDZTranscribe = \{\s*\n\s*toggle,\s*\n\s*remount,/.test(txSrc));
+    check("transcribe remount preserves visibility", /function remount\(\)[\s\S]{0,300}box\.hidden = !visible/.test(txSrc));
+    check("transcribe toggle tracks visibility", /visible = !box\.hidden/.test(txSrc));
+  }
+
+  console.log("\nRecognizer liveness (live-test 2026-07-29 — recognizer died silently mid-meeting, UI said recording):");
+  {
+    const txSrc = fs.readFileSync(path.join(__dirname, "..", "content", "transcribe.js"), "utf8");
+    // A failed start() must schedule its own retry — a never-started recognizer fires no onend.
+    check("failed start() schedules a retry (not onend-reliant)", /rec\.start\(\);\s*\n\s*\} catch \{[\s\S]{0,500}setTimeout\(\(\) => \{\s*\n\s*if \(running\) startRec\(\);/.test(txSrc));
+    // The watchdog is the backstop for every silent-death mode we can't enumerate.
+    check("watchdog restarts a quiet recognizer", /function armWatchdog\(\)[\s\S]{0,600}Date\.now\(\) - lastEventAt > WATCHDOG_MS[\s\S]{0,200}startRec\(\)/.test(txSrc));
+    check("watchdog disarmed on deliberate stop", /if \(!running\) \{\s*\n\s*disarmWatchdog\(\);/.test(txSrc));
+    // Liveness must be shown from recognizer events, not user intent.
+    check("liveness badge driven by onstart", /rec\.onstart = \(\) => \{[\s\S]{0,200}setState\("live"\)/.test(txSrc));
+    check("recognizer events feed lastEventAt", /rec\.onresult = \(ev\) => \{\s*\n\s*lastEventAt = Date\.now\(\)/.test(txSrc));
+  }
+
   console.log("\nMeeting archive (buildArchiveHtml — pure builder; download click is browser-test-owed):");
   {
     const aSrc = fs.readFileSync(path.join(__dirname, "..", "content", "archive.js"), "utf8");

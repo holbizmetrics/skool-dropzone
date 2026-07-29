@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Member-side companion for Skool meetings — chat-with-files, whiteboard, instant presentation, polls & reactions, breakout rooms, one-click meeting archive; E2EE (mic-transcription v0 excepted and labeled). Phase 11.",
   "background": {
     "service_worker": "background/service-worker.js"

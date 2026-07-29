@@ -1,6 +1,6 @@
 {
   "name": "skool-dropzone",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Member-side companion for Skool meetings — E2EE chat/files/presentation. This root package is the test + CI orchestrator; the extension itself is zero-dependency vanilla JS.",
   "license": "MIT",

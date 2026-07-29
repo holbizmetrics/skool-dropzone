@@ -26,6 +26,14 @@
   let lang = "en-US";
   const lines = []; // { ts, text }
   let startedAt = null;
+  let visible = false; // box visibility survives panel DOM re-mounts
+  // Liveness (live-test finding 2026-07-29): the recognizer died mid-meeting
+  // and the UI kept showing "recording". `running` is user INTENT — these
+  // track what the recognizer is actually doing, and a watchdog restarts it
+  // when it goes quiet without saying so.
+  let lastEventAt = 0; // last sign of life from the recognizer
+  let watchdog = null;
+  const WATCHDOG_MS = 20000; // silence >20s with no recognizer event = stalled
 
   function panel() {
     return document.getElementById(PANEL_ID);
@@ -47,6 +55,7 @@
           <option value="de-DE">Deutsch</option>
         </select>
         <button type="button" class="sdz-btn sdz-tx-download" disabled>⬇ Save .txt</button>
+        <span class="sdz-tx-state" hidden></span>
       </div>
       <div class="sdz-tx-note">Mic-based: speakers on = others audible too; headphones = you only. Audio goes to Google for recognition (not E2EE).</div>
       <div class="sdz-tx-lines" role="log" aria-live="polite"></div>
@@ -77,6 +86,17 @@
     const box = ensureBox();
     if (!box) return;
     box.hidden = !box.hidden;
+    visible = !box.hidden;
+  }
+
+  // Called by panel.js after Skool wipes the DOM and the panel is rebuilt:
+  // recognition (rec/running/lines) lives in this closure and survived, but
+  // the box element died with the old panel. Recreate it in the same state.
+  function remount() {
+    if (!visible && !running && !lines.length) return; // nothing to restore
+    const box = ensureBox();
+    if (box) box.hidden = !visible;
+    setState(lastState); // the badge element died with the old panel DOM
   }
 
   // F2: tell the room. A participant whose speech may reach Google's
@@ -118,8 +138,18 @@
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = lang;
+    lastEventAt = Date.now();
+
+    rec.onstart = () => {
+      lastEventAt = Date.now();
+      setState("live");
+    };
+    rec.onaudiostart = () => {
+      lastEventAt = Date.now();
+    };
 
     rec.onresult = (ev) => {
+      lastEventAt = Date.now();
       let interim = "";
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const r = ev.results[i];
@@ -132,6 +162,7 @@
     };
 
     rec.onerror = (ev) => {
+      lastEventAt = Date.now();
       // 'no-speech' / 'aborted' are routine — onend's auto-restart handles them.
       if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
         running = false;
@@ -140,6 +171,7 @@
         broadcastStatus(false); // the room saw ON; it must also see the stop
       } else if (ev.error === "network") {
         setInterim("Speech service unreachable (network) — retrying…");
+        setState("retrying");
       }
     };
 
@@ -147,15 +179,11 @@
     // limits). While the user wants it running, restart — that's what makes
     // "continuous" actually continuous.
     rec.onend = () => {
+      lastEventAt = Date.now();
       if (running) {
+        setState("retrying");
         setTimeout(() => {
-          if (running) {
-            try {
-              startRec();
-            } catch {
-              /* next onend retries */
-            }
-          }
+          if (running) startRec();
         }, 250);
       }
     };
@@ -163,7 +191,39 @@
     try {
       rec.start();
     } catch {
-      /* start() throws if called while already started — harmless */
+      // Live-test finding 2026-07-29: a failed start() used to be swallowed
+      // with "next onend retries" — but a recognizer that never started never
+      // fires onend, so the chain died silently while the UI said recording.
+      // Schedule the retry ourselves; the watchdog is the backstop.
+      setState("retrying");
+      setTimeout(() => {
+        if (running) startRec();
+      }, 1000);
+    }
+
+    armWatchdog();
+  }
+
+  // Backstop for every silent-death mode we can't enumerate: if the user wants
+  // transcription and the recognizer has shown no sign of life for WATCHDOG_MS,
+  // tear it down and start fresh. A needless restart during real silence is
+  // harmless (there is no interim text to lose); a dead recognizer that LOOKS
+  // alive is the failure that cost a meeting's transcript.
+  function armWatchdog() {
+    if (watchdog) return;
+    watchdog = setInterval(() => {
+      if (!running) return;
+      if (Date.now() - lastEventAt > WATCHDOG_MS) {
+        setState("retrying");
+        startRec(); // stops the old instance first
+      }
+    }, 5000);
+  }
+
+  function disarmWatchdog() {
+    if (watchdog) {
+      clearInterval(watchdog);
+      watchdog = null;
     }
   }
 
@@ -172,6 +232,8 @@
     rec.onend = null; // no auto-restart on a deliberate stop
     rec.onresult = null;
     rec.onerror = null;
+    rec.onstart = null;
+    rec.onaudiostart = null;
     try {
       rec.stop();
     } catch {
@@ -179,6 +241,10 @@
     }
     rec = null;
     setInterim("");
+    if (!running) {
+      disarmWatchdog();
+      setState("off");
+    }
   }
 
   function addLine(text) {
@@ -217,6 +283,25 @@
     if (el) el.textContent = text;
   }
 
+  // The badge tells the truth the Start button can't: whether the recognizer
+  // is actually listening right now ("live"), between instances ("retrying"),
+  // or off. `lastState` survives DOM re-mounts.
+  let lastState = "off";
+  function setState(state) {
+    lastState = state;
+    const box = ensureBox();
+    if (!box) return;
+    const el = box.querySelector(".sdz-tx-state");
+    if (!el) return;
+    if (state === "off") {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.dataset.state = state;
+    el.textContent = state === "live" ? "● listening" : "↻ restarting…";
+  }
+
   function syncControls(box) {
     if (!box) return;
     const btn = box.querySelector(".sdz-tx-start");
@@ -246,6 +331,7 @@
 
   window.SDZTranscribe = {
     toggle,
+    remount,
     get lines() {
       return lines.slice(); // for the meeting archive
     },

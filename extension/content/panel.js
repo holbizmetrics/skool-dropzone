@@ -27,6 +27,8 @@
   let convenienceMode = false; // joined with empty passphrase
   let convenienceConfirmed = false; // user explicitly accepted the no-passphrase exposure (H2)
   let lastPeers = 0; // for presence (join/leave) detection
+  let lastPassphrase = null; // survives DOM re-mounts so the joined UI can be restored
+  let lastStatus = null; // last setStatus() call — re-applied after a re-mount
   const messages = [];
   const staged = new Map();
   let stageSeq = 0;
@@ -65,7 +67,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.0</span>
+          <span class="sdz-version">v0.8.1</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -261,6 +263,7 @@
         onStatus: onTransportStatus,
       });
       connected = true;
+      lastPassphrase = passphrase;
       const join = document.querySelector(`#${PANEL_ID} .sdz-join`);
       if (join) {
         join.disabled = true;
@@ -324,6 +327,7 @@
   }
 
   function setStatus(mode, text) {
+    lastStatus = { mode, text };
     const el = document.querySelector(`#${PANEL_ID} .sdz-status`);
     if (!el) return;
     el.dataset.mode = mode;
@@ -951,22 +955,50 @@
     setCallState(!!document.querySelector(CALL_ROOT_SELECTOR));
   }
 
+  // === re-mount seam ===
+  // Rule this owns: a panel rebuilt after Skool wipes the DOM (route change,
+  // collapsing the meeting view) must reflect the ACTUAL session state held in
+  // this closure — joined room, status, safe-word, messages, transcript — not
+  // the fresh-install defaults its HTML template contains. Before this seam
+  // existed, a DOM wipe showed a dead "Join room" screen over a live mesh
+  // (onJoin early-returns when connected), which read as "I have to re-enter."
+  function remountHost() {
+    if (document.getElementById(HOST_ID)) return;
+    ensureHost();
+    messages.forEach(renderMessage);
+    renderStage();
+    if (isOpen) openPanel();
+    restoreConnectionUi();
+    if (window.SDZTranscribe && window.SDZTranscribe.remount) window.SDZTranscribe.remount();
+  }
+
+  function restoreConnectionUi() {
+    if (!connected) return;
+    const pass = document.querySelector(`#${PANEL_ID} .sdz-pass`);
+    const join = document.querySelector(`#${PANEL_ID} .sdz-join`);
+    if (pass) {
+      pass.value = lastPassphrase || "";
+      pass.disabled = true;
+    }
+    if (join) {
+      join.disabled = true;
+      join.textContent = "Joined";
+    }
+    if (lastStatus) setStatus(lastStatus.mode, lastStatus.text);
+    if (window.SDZTransport) showSafeWord(lastPassphrase || "", window.SDZTransport.room);
+  }
+
   ensureHost();
   checkCallPresence();
 
   const observer = new MutationObserver(() => {
-    if (!document.getElementById(HOST_ID)) {
-      ensureHost();
-      messages.forEach(renderMessage);
-      renderStage();
-      if (isOpen) openPanel();
-    }
+    remountHost();
     checkCallPresence();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   window.addEventListener("popstate", () => {
-    if (!document.getElementById(HOST_ID)) ensureHost();
+    remountHost();
     checkCallPresence();
   });
 })();
