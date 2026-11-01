@@ -548,6 +548,48 @@ function bytesEqual(a, b) {
     check("empty sections omitted", !htmlEmpty.includes("<h2>Chat</h2>") && !htmlEmpty.includes("<h2>Transcript</h2>") && !htmlEmpty.includes("<h2>Files shared</h2>"));
   }
 
+  // --- U8 roster: selectors + loud failure (fake DOM, no jsdom dependency) ---
+  {
+    const R = require(path.join(__dirname, "..", "content", "roster.js"));
+    const el = (cls, kids = [], text = "") => ({
+      cls, kids, textContent: text,
+      matches(sel) {
+        return sel.split(",").some((x) => {
+          x = x.trim();
+          return x.startsWith("[class*=") ? cls.includes(x.slice(9, -2)) : x === "." + cls;
+        });
+      },
+      querySelectorAll(sel) {
+        const out = [];
+        const walk = (n) => n.kids.forEach((k) => { if (k.matches(sel)) out.push(k); walk(k); });
+        walk(this);
+        return out;
+      },
+      querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+    });
+    const tile = (name) => el("str-video__participant-view", name == null ? [] : [el("str-video__participant-details__name", [], name)]);
+    const r1 = R.read(el("root", [tile("Mark Kashef"), tile("  Ty   Wells "), tile("Mark Kashef"), tile(null)]));
+    check("roster: tile names read, whitespace cleaned, deduped in order", JSON.stringify(r1.names) === JSON.stringify(["Mark Kashef", "Ty Wells"]));
+    check("roster: tiles-only result is flagged partial (pagination)", r1.source === "video-tiles" && r1.partial === true && /may miss people/.test(R.describe(r1)));
+    check("roster: unnamed tile counted, not silently dropped", r1.unnamed === 1 && /1 entry had no readable name/.test(R.describe(r1)));
+    const listItem = (name) => el("str-video__participant-listing-item", [el("str-video__participant-details__name", [], name)]);
+    const r2 = R.read(el("root", [tile("Mark Kashef"), listItem("Mark Kashef"), listItem("Holger Morlok"), listItem("Clevette Coombs")]));
+    check("roster: People list preferred over tiles, not partial", r2.source === "people-list" && r2.names.length === 3 && r2.partial === false);
+    // NEGATIVE: Skool restyled - tiles present, no known name element. Must say so loudly.
+    const r3 = R.read(el("root", [el("str-video__participant-view", [el("some-new-label", [], "Mark")]), el("str-video__participant-view")]));
+    check("roster NEGATIVE: stale selector reads as 'out of date', never as an empty roster", r3.source === "none" && r3.names.length === 0 && /out of date/.test(R.describe(r3)) && /found 2/.test(R.describe(r3)));
+    const r4 = R.read(el("root", []));
+    check("roster NEGATIVE: no tiles at all says so", r4.source === "none" && /no participant tiles/.test(R.describe(r4)));
+    const csv = R.toCSV(['=HYPERLINK("x")', 'Ann "A" B'], "2026-10-31T12:00:00Z");
+    check("roster CSV: formula injection neutralised + quotes doubled", csv.includes(`"'=HYPERLINK(""x"")"`) && csv.includes('"Ann ""A"" B"'));
+    const panelSrcR = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const manR = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
+    const jsR = manR.content_scripts[0].js;
+    const copyFn = (panelSrcR.split("function copyNames")[1] || "").split("function saveArchive")[0];
+    check("roster wired: loaded before panel.js + button + handler", jsR.indexOf("content/roster.js") > -1 && jsR.indexOf("content/roster.js") < jsR.indexOf("content/panel.js") && panelSrcR.includes("sdz-names-btn") && copyFn.length > 0);
+    check("roster local-only: copyNames never touches the transport", copyFn.length > 0 && !/SDZTransport|\.send\(/.test(copyFn));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

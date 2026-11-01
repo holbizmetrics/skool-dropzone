@@ -2,6 +2,7 @@
  * Shared by the meeting panel (content script) and the test harness. */
 
 .sdz-wb-overlay {
+  color-scheme: only light; /* U3 */
   position: fixed;
   inset: 0;
   z-index: 2147483647;

@@ -3,6 +3,7 @@
  * Loaded as a content CSS on /live/* and via <link> in the harness. */
 
 .sdz-present-overlay {
+  color-scheme: only light; /* U3 */
   position: fixed;
   inset: 0;
   z-index: 2147483647;

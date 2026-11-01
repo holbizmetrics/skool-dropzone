@@ -67,7 +67,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.1</span>
+          <span class="sdz-version">v0.8.2</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -86,6 +86,7 @@
         <button class="sdz-poll-toggle" type="button" title="Start a poll">📊 Poll</button>
         <button class="sdz-rooms-toggle" type="button" title="Breakout rooms">🚪 Rooms</button>
         <button class="sdz-archive-btn" type="button" title="Save the whole meeting — chat, transcript, whiteboard, file list — as one HTML file">💾 Archive</button>
+        <button class="sdz-names-btn" type="button" title="Copy the participant names to your clipboard (local only, nothing is sent to the room)">👥 Names</button>
       </div>
 
       <div class="sdz-rooms" hidden>
@@ -151,6 +152,7 @@
       if (window.SDZTranscribe) window.SDZTranscribe.toggle();
     });
     panel.querySelector(".sdz-archive-btn").addEventListener("click", saveArchive);
+    panel.querySelector(".sdz-names-btn").addEventListener("click", copyNames);
     wireSlideCompose(panel);
     wireEngage(panel);
     wireRooms(panel);
@@ -876,6 +878,38 @@
   }
 
   // === Phase 11: meeting archive (build logic in archive.js; collection here) ===
+
+  // === U8: participant roster, first slice (logic + selectors in roster.js) ===
+  // Local-only by design: reads the meeting DOM, writes the clipboard, posts a
+  // system line to THIS panel. Never sent over the transport.
+  function copyNames() {
+    if (!window.SDZRoster) return;
+    const r = window.SDZRoster.read(document);
+    const status = window.SDZRoster.describe(r);
+    if (!r.names.length) {
+      addMessage({ kind: "system", body: "👥 " + status });
+      return;
+    }
+    const text = window.SDZRoster.toText(r.names);
+    const done = () => addMessage({ kind: "system", body: "👥 Copied " + status + " (local only, not shared with the room.)" });
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      ta.remove();
+      if (ok) done();
+      else addMessage({ kind: "system", body: "👥 Clipboard blocked by the browser. " + status + ": " + r.names.join(", ") });
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
 
   function saveArchive() {
     if (!window.SDZArchive) return;
