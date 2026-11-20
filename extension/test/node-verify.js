@@ -730,6 +730,31 @@ function bytesEqual(a, b) {
       (bridgeSrc.match(/\.publish\(/g) || []).length === 1 && /publish\(TOPIC,/.test(bridgeSrc));
   }
 
+  // --- layout: side, width, SDZ button position (U9 + U1) ---
+  {
+    const Lay = require(path.join(__dirname, "..", "content", "layout.js"));
+    check("layout: width clamps to [300, min(900, 70% of window)]",
+      Lay.clampWidth(100, 1920) === 300 && Lay.clampWidth(5000, 1920) === 900 && Lay.clampWidth(800, 1000) === 700 && Lay.clampWidth(420, 1920) === 420);
+    check("layout NEGATIVE: garbage width falls back to the default, never NaN",
+      Lay.clampWidth("wide", 1920) === 360 && Lay.clampWidth(undefined, 1920) === 360 && Lay.clampWidth(NaN, 400) === 300);
+    const size = { width: 44, height: 28 };
+    const p1 = Lay.clampMarker({ x: 3000, y: -50 }, size, { width: 1280, height: 720 });
+    check("layout: SDZ button stored off-screen is pulled back fully inside", p1.x === 1280 - 44 - 6 && p1.y === 6);
+    check("layout NEGATIVE: no stored position means CSS default (null), not 0,0",
+      Lay.clampMarker(null, size, { width: 1280, height: 720 }) === null && Lay.clampMarker({ x: "a", y: 1 }, size, { width: 1280, height: 720 }) === null);
+    check("layout: drag width follows the inner edge on both sides",
+      Lay.widthFromDrag("right", 1500, 1920) === 420 && Lay.widthFromDrag("left", 420, 1920) === 420);
+    check("layout: a small wobble is a click, a real move is a drag", !Lay.isDrag(3, -4) && Lay.isDrag(5, 0) && Lay.isDrag(0, -5));
+    const n = Lay.normalize({ side: "top", width: 99999, marker: { x: 10, y: 20 } }, { width: 1000, height: 700 });
+    check("layout NEGATIVE: unknown side becomes right; stored width re-clamped", n.side === "right" && n.width === 700 && n.marker.x === 10);
+    const pSrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const mjs = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8")).content_scripts[0].js;
+    check("layout wired: dock button, grip, draggable marker; a drag does not also toggle",
+      /sdz-dock"\)\.addEventListener\("click", onDockToggle\)/.test(pSrc) && /sdz-grip"\)\.addEventListener\("pointerdown", onGripPointerDown\)/.test(pSrc) &&
+      /addEventListener\("click", onMarkerClick\)/.test(pSrc) && /if \(markerJustDragged\) \{[\s\S]*?return;/.test(pSrc) &&
+      mjs.indexOf("content/layout.js") > -1 && mjs.indexOf("content/layout.js") < mjs.indexOf("content/panel.js"));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));

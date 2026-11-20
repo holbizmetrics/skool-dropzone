@@ -123,6 +123,70 @@
   color: #111827;
 }
 
+/* === layout: side, width grip, dock button (rules in layout.js) === */
+#skool-dropzone-panel .sdz-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+#skool-dropzone-panel .sdz-dock {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+#skool-dropzone-panel .sdz-dock:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+/* The grip sits on the panel's INNER edge: left edge when docked right. */
+#skool-dropzone-panel .sdz-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+}
+#skool-dropzone-panel .sdz-grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 3px;
+  height: 56px;
+  margin-top: -28px;
+  border-radius: 2px;
+  background: #93c5fd;
+  opacity: 0.7;
+}
+#skool-dropzone-panel .sdz-grip:hover::after {
+  background: #2563eb;
+  opacity: 1;
+}
+/* Docked left: mirror position, border, shadow, slide direction and grip. */
+#skool-dropzone-panel.sdz-side-left {
+  right: auto;
+  left: 0;
+  border-left: 0;
+  border-right: 1px solid #e5e7eb;
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.12);
+  transform: translateX(-100%);
+}
+#skool-dropzone-panel.sdz-side-left.sdz-open { transform: translateX(0); }
+#skool-dropzone-panel.sdz-side-left .sdz-grip {
+  left: auto;
+  right: -4px;
+}
+#skool-dropzone-marker { touch-action: none; }
+
 /* === connect bar === */
 #skool-dropzone-panel .sdz-connect {
   display: flex;

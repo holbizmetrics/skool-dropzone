@@ -57,9 +57,122 @@
     marker.id = MARKER_ID;
     marker.type = "button";
     marker.textContent = "SDZ";
-    marker.title = "skool-dropzone — click to open";
-    marker.addEventListener("click", onUserToggle);
+    marker.title = "skool-dropzone — click to open, drag to move";
+    marker.addEventListener("click", onMarkerClick);
+    marker.addEventListener("pointerdown", onMarkerPointerDown);
     host.appendChild(marker);
+    applyLayout();
+  }
+
+  // === layout seam (side, width, SDZ button position — rules live in layout.js) ===
+  let layout = window.SDZLayout ? window.SDZLayout.normalize(null, viewport()) : null;
+  let markerDrag = null; // { startX, startY, left, top, moved }
+  let markerJustDragged = false;
+
+  function viewport() {
+    return { width: window.innerWidth, height: window.innerHeight };
+  }
+
+  function applyLayout() {
+    if (!layout || !window.SDZLayout) return;
+    const L = window.SDZLayout;
+    layout.width = L.clampWidth(layout.width, window.innerWidth);
+    const panel = document.getElementById(PANEL_ID);
+    if (panel) {
+      panel.style.width = layout.width + "px";
+      panel.classList.toggle("sdz-side-left", layout.side === "left");
+      const dock = panel.querySelector(".sdz-dock");
+      if (dock) dock.title = layout.side === "left" ? "Move the panel to the right side" : "Move the panel to the left side";
+    }
+    const marker = document.getElementById(MARKER_ID);
+    if (marker) {
+      const pos = L.clampMarker(layout.marker, { width: marker.offsetWidth || 44, height: marker.offsetHeight || 28 }, viewport());
+      if (pos) {
+        marker.style.left = pos.x + "px";
+        marker.style.top = pos.y + "px";
+        marker.style.right = "auto";
+        marker.style.bottom = "auto";
+      } else {
+        marker.style.left = marker.style.top = marker.style.right = marker.style.bottom = "";
+      }
+    }
+  }
+
+  function saveLayout() {
+    if (layout && window.SDZLayout) window.SDZLayout.save({ side: layout.side, width: layout.width, marker: layout.marker });
+  }
+
+  function onMarkerClick(e) {
+    if (markerJustDragged) {
+      markerJustDragged = false;
+      e.preventDefault();
+      return; // the press was a move, not a toggle
+    }
+    onUserToggle();
+  }
+
+  function onMarkerPointerDown(e) {
+    if (e.button !== 0 || !layout) return;
+    const marker = e.currentTarget;
+    const rect = marker.getBoundingClientRect();
+    markerDrag = { startX: e.clientX, startY: e.clientY, left: rect.left, top: rect.top, moved: false };
+    try {
+      marker.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* capture is a nicety; the drag still works while the pointer stays on the button */
+    }
+    marker.addEventListener("pointermove", onMarkerPointerMove);
+    marker.addEventListener("pointerup", onMarkerPointerUp, { once: true });
+  }
+
+  function onMarkerPointerMove(e) {
+    if (!markerDrag) return;
+    const dx = e.clientX - markerDrag.startX;
+    const dy = e.clientY - markerDrag.startY;
+    if (!markerDrag.moved && !window.SDZLayout.isDrag(dx, dy)) return;
+    markerDrag.moved = true;
+    layout.marker = { x: markerDrag.left + dx, y: markerDrag.top + dy };
+    applyLayout();
+  }
+
+  function onMarkerPointerUp(e) {
+    e.currentTarget.removeEventListener("pointermove", onMarkerPointerMove);
+    if (markerDrag && markerDrag.moved) {
+      markerJustDragged = true;
+      saveLayout();
+    }
+    markerDrag = null;
+  }
+
+  function onDockToggle() {
+    if (!layout) return;
+    layout.side = layout.side === "left" ? "right" : "left";
+    applyLayout();
+    saveLayout();
+  }
+
+  function onGripPointerDown(e) {
+    if (e.button !== 0 || !layout) return;
+    e.preventDefault();
+    const grip = e.currentTarget;
+    try {
+      grip.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* see onMarkerPointerDown */
+    }
+    const move = (ev) => {
+      layout.width = window.SDZLayout.widthFromDrag(layout.side, ev.clientX, window.innerWidth);
+      applyLayout();
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener(
+      "pointerup",
+      () => {
+        grip.removeEventListener("pointermove", move);
+        saveLayout();
+      },
+      { once: true }
+    );
   }
 
   function renderPanel(host) {
@@ -68,13 +181,17 @@
     panel.id = PANEL_ID;
     panel.setAttribute("aria-hidden", "true");
     panel.innerHTML = `
+      <div class="sdz-grip" title="Drag to make the panel wider or narrower"></div>
       <header class="sdz-header">
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.5</span>
+          <span class="sdz-version">v0.8.6</span>
         </div>
-        <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
+        <div class="sdz-header-actions">
+          <button class="sdz-dock" type="button" title="Move the panel to the left side" aria-label="Move the panel to the other side">⇄</button>
+          <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
+        </div>
       </header>
 
       <div class="sdz-connect">
@@ -160,6 +277,8 @@
     host.appendChild(panel);
 
     panel.querySelector(".sdz-close").addEventListener("click", onUserClose);
+    panel.querySelector(".sdz-dock").addEventListener("click", onDockToggle);
+    panel.querySelector(".sdz-grip").addEventListener("pointerdown", onGripPointerDown);
     panel.querySelector(".sdz-composer").addEventListener("submit", onSubmit);
     panel.querySelector(".sdz-attach input").addEventListener("change", onAttach);
     panel.querySelector(".sdz-join").addEventListener("click", onJoin);
@@ -1238,6 +1357,7 @@
   function remountHost() {
     if (document.getElementById(HOST_ID)) return;
     ensureHost();
+    applyLayout();
     messages.forEach(renderMessage);
     renderStage();
     if (isOpen) openPanel();
@@ -1263,6 +1383,13 @@
 
   ensureHost();
   checkCallPresence();
+  if (window.SDZLayout) {
+    window.SDZLayout.load().then((stored) => {
+      layout = window.SDZLayout.normalize(stored, viewport());
+      applyLayout();
+    });
+    window.addEventListener("resize", applyLayout); // re-clamp width + button on a smaller window
+  }
 
   const observer = new MutationObserver(() => {
     remountHost();
