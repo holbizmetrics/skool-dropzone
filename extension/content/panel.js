@@ -72,7 +72,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.3</span>
+          <span class="sdz-version">v0.8.4</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -83,6 +83,22 @@
       </div>
       <div class="sdz-status" data-mode="offline">Not connected — join the room to chat with other members.</div>
       <div class="sdz-safeword" hidden></div>
+
+      <details class="sdz-codes">
+        <summary>Connect by code — two computers, no server</summary>
+        <ol class="sdz-codes-help">
+          <li>Both of you type the <strong>same passphrase</strong> in the box above.</li>
+          <li>One person clicks <strong>Create my code</strong> and sends it to the other (Skool chat works).</li>
+          <li>The other pastes it below, clicks <strong>Use code</strong>, and sends the reply code back.</li>
+          <li>The first person pastes that reply and clicks <strong>Use code</strong>. Connected.</li>
+        </ol>
+        <div class="sdz-codes-note">With 3 or more people, each pair does this once.</div>
+        <button class="sdz-code-create sdz-btn" type="button">Create my code</button>
+        <textarea class="sdz-code-out" rows="2" readonly placeholder="Your code appears here"></textarea>
+        <button class="sdz-code-copy sdz-btn" type="button" disabled>Copy my code</button>
+        <textarea class="sdz-code-in" rows="2" placeholder="Paste the other person's code here"></textarea>
+        <button class="sdz-code-use sdz-btn" type="button">Use code</button>
+      </details>
 
       <div class="sdz-tools">
         <button class="sdz-wb-toggle" type="button" title="Open shared whiteboard">🖊 Whiteboard</button>
@@ -150,6 +166,9 @@
     panel.querySelector(".sdz-pass").addEventListener("keydown", (e) => {
       if (e.key === "Enter") onJoin();
     });
+    panel.querySelector(".sdz-code-create").addEventListener("click", onCodeCreate);
+    panel.querySelector(".sdz-code-use").addEventListener("click", onCodeUse);
+    panel.querySelector(".sdz-code-copy").addEventListener("click", onCodeCopy);
     panel.querySelector(".sdz-wb-toggle").addEventListener("click", () => {
       if (window.SDZWhiteboard) window.SDZWhiteboard.toggle(window.SDZTransport);
     });
@@ -280,6 +299,133 @@
       showSafeWord(passphrase, window.SDZTransport.room);
     } catch (e) {
       setStatus("error", "Could not join: " + (e && e.message ? e.message : e));
+    }
+  }
+
+  // === connect-by-code seam (serverless P2P between two computers) ===
+  // Rule this owns: a code connection is ALWAYS passphrase-encrypted. Without a
+  // relay there is no "convenience mode" worth having, and a blank passphrase
+  // would derive the key from the public meeting id. So: no passphrase, no code.
+  // The handshake itself lives in manual-signal.js (SDZManual); this only wires
+  // the panel to it and tells the person what to do next at every step.
+  const CODE_FAIL_AFTER_MS = 20000;
+
+  function codeEl(cls) {
+    return document.querySelector(`#${PANEL_ID} .${cls}`);
+  }
+
+  function codePassphrase() {
+    const pass = codeEl("sdz-pass") ? codeEl("sdz-pass").value : "";
+    if (!pass) {
+      setStatus("error", "Type the room passphrase first. Both of you must type the same one.");
+      return null;
+    }
+    if (!window.SDZManual || !window.SDZTransport) {
+      setStatus("error", "Connect-by-code is unavailable (reload the extension).");
+      return null;
+    }
+    return pass;
+  }
+
+  // The code path shares the panel's joined state with the relay path, so the
+  // rest of the panel (chat, files, whiteboard, safe-word) works unchanged.
+  function markCodeSession(pass) {
+    if (connected) return;
+    connected = true;
+    convenienceMode = false;
+    lastPassphrase = pass;
+    const passInput = codeEl("sdz-pass");
+    if (passInput) passInput.disabled = true;
+    const join = codeEl("sdz-join");
+    if (join) {
+      join.disabled = true;
+      join.textContent = "Using codes";
+    }
+    showSafeWord(pass, window.SDZTransport.room);
+  }
+
+  function showCode(code) {
+    const out = codeEl("sdz-code-out");
+    const copy = codeEl("sdz-code-copy");
+    if (out) out.value = code;
+    if (copy) {
+      copy.disabled = false;
+      copy.textContent = "Copy my code";
+    }
+  }
+
+  // A pair whose networks block direct links never connects and never errors;
+  // say so instead of leaving "Connecting…" up forever.
+  function failIfStillAlone(peersBefore) {
+    setTimeout(() => {
+      if (window.SDZTransport && window.SDZTransport.count <= peersBefore) {
+        setStatus(
+          "error",
+          "No direct connection after 20 seconds. Your two networks may block direct links. Try again, or one of you switches network (for example a phone hotspot)."
+        );
+      }
+    }, CODE_FAIL_AFTER_MS);
+  }
+
+  async function onCodeCreate() {
+    const pass = codePassphrase();
+    if (pass === null) return;
+    setStatus("connecting", "Making your code… (a few seconds)");
+    try {
+      const code = await window.SDZManual.createOffer({ passphrase: pass, onMessage: onRemoteMessage, onStatus: onTransportStatus });
+      showCode(code);
+      markCodeSession(pass);
+      setStatus("waiting", "Your code is ready. Send it to the other person, then paste their reply code below and click Use code.");
+    } catch (e) {
+      setStatus("error", "Could not make a code: " + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function onCodeUse() {
+    const pass = codePassphrase();
+    if (pass === null) return;
+    const input = codeEl("sdz-code-in");
+    const text = input ? input.value : "";
+    if (!text.trim()) {
+      setStatus("error", "Paste the other person's code into the box first.");
+      return;
+    }
+    let kind;
+    try {
+      kind = window.SDZManual.decodeConnectCode(text).type;
+    } catch (e) {
+      setStatus("error", e && e.message ? e.message : String(e));
+      return;
+    }
+    const peersBefore = window.SDZTransport.count;
+    try {
+      if (kind === "offer") {
+        setStatus("connecting", "Making your reply code… (a few seconds)");
+        const reply = await window.SDZManual.acceptOffer(text, { passphrase: pass, onMessage: onRemoteMessage, onStatus: onTransportStatus });
+        showCode(reply);
+        markCodeSession(pass);
+        setStatus("waiting", "Your reply code is ready. Send it back. You are connected as soon as they use it.");
+      } else {
+        setStatus("connecting", "Connecting…");
+        await window.SDZManual.acceptAnswer(text);
+        failIfStillAlone(peersBefore);
+      }
+      if (input) input.value = "";
+    } catch (e) {
+      setStatus("error", "That code did not work: " + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function onCodeCopy() {
+    const out = codeEl("sdz-code-out");
+    const copy = codeEl("sdz-code-copy");
+    if (!out || !out.value) return;
+    try {
+      await navigator.clipboard.writeText(out.value);
+      if (copy) copy.textContent = "Copied ✓";
+    } catch (e) {
+      out.select();
+      setStatus("error", "Copy was blocked by the browser: " + (e && e.message ? e.message : e) + ". The code is selected; press Ctrl+C.");
     }
   }
 

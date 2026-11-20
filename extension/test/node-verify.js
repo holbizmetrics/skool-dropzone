@@ -598,6 +598,25 @@ function bytesEqual(a, b) {
     check("roster AGORA NEGATIVE: partial data-attribute match is not a grid", r7.source === "none" && r7.tileCount === 0);
     const panelSrcA = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
     check("call detection: Agora grid selector + lobby JOIN CALL guard wired", /CALL_ROOT_SELECTOR = "[^"]*\[data-columns\]\[data-rows\]\[data-ratio\]/.test(panelSrcA) && /!lobbyJoinButtonVisible\(\)/.test(panelSrcA));
+    // Connect-by-code in the PANEL (source-level wiring; the real handshake needs two browsers).
+    const fnBody = (name) => (panelSrcA.split("function " + name + "(")[1] || "").split("\n  }\n")[0];
+    check("codes wired: three buttons in the panel, each with its handler",
+      ["sdz-code-create", "sdz-code-use", "sdz-code-copy"].every((c) => panelSrcA.includes(`class="${c} `) || panelSrcA.includes(`class="${c}"`)) &&
+      /sdz-code-create"\)\.addEventListener\("click", onCodeCreate\)/.test(panelSrcA) &&
+      /sdz-code-use"\)\.addEventListener\("click", onCodeUse\)/.test(panelSrcA) &&
+      /sdz-code-copy"\)\.addEventListener\("click", onCodeCopy\)/.test(panelSrcA));
+    check("codes use the tested handshake (SDZManual create/accept/answer + decode before acting)",
+      /SDZManual\.createOffer/.test(fnBody("onCodeCreate")) && /SDZManual\.acceptOffer/.test(fnBody("onCodeUse")) &&
+      /SDZManual\.acceptAnswer/.test(fnBody("onCodeUse")) && /decodeConnectCode/.test(fnBody("onCodeUse")));
+    // NEGATIVE: no passphrase, no code (a blank one would key the room off the public meeting id).
+    const passFn = fnBody("codePassphrase");
+    check("codes NEGATIVE: blank passphrase refuses with a message, returns null",
+      /if \(!pass\)/.test(passFn) && /return null/.test(passFn) && /passphrase first/.test(passFn) &&
+      /pass === null\) return/.test(fnBody("onCodeCreate")) && /pass === null\) return/.test(fnBody("onCodeUse")));
+    check("codes: a pair that never connects is told so (timeout), not left on 'Connecting…'",
+      /failIfStillAlone\(peersBefore\)/.test(fnBody("onCodeUse")) && /CODE_FAIL_AFTER_MS/.test(fnBody("failIfStillAlone")));
+    const manA = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8")).content_scripts[0].js;
+    check("codes: manual-signal.js loads before panel.js", manA.indexOf("content/manual-signal.js") > -1 && manA.indexOf("content/manual-signal.js") < manA.indexOf("content/panel.js"));
     const csv = R.toCSV(['=HYPERLINK("x")', 'Ann "A" B'], "2026-10-31T12:00:00Z");
     check("roster CSV: formula injection neutralised + quotes doubled", csv.includes(`"'=HYPERLINK(""x"")"`) && csv.includes('"Ann ""A"" B"'));
     const panelSrcR = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
