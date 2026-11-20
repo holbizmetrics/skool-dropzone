@@ -7,7 +7,12 @@
   // .str-video__call-controls (the bottom controls bar) is the most
   // reliable "we are in an active call" signal — verified in a live
   // meeting on 2026-05-20 (URL: skool.com/live/<id>).
-  const CALL_ROOT_SELECTOR = ".str-video__call-controls";
+  // 2026-11-20: Skool moved its calls from Stream to Agora (console: "AgoraRTC
+  // client v4.24.8"; zero str-video classes), so the selector above matched
+  // nothing and the panel never auto-opened. The Agora call view's tile grid
+  // carries stable data attributes; it is the second signal. Both are kept so
+  // either generation of Skool's UI opens the panel.
+  const CALL_ROOT_SELECTOR = ".str-video__call-controls, [data-columns][data-rows][data-ratio]";
 
   const MAX_FILE = 50 * 1024 * 1024; // 50 MB cap for Phase 4
   const MAX_CHUNKS = Math.ceil(MAX_FILE / (16 * 1024)) + 2; // receive-side total guard (SECURITY-AUDIT P2)
@@ -67,7 +72,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.2</span>
+          <span class="sdz-version">v0.8.3</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -985,8 +990,20 @@
       .replace(/'/g, "&#39;");
   }
 
+  // The pre-join lobby also shows your own tile, so the grid alone may be there
+  // before you join. A visible "JOIN CALL" button means: not in the call yet.
+  // (Whether the lobby really renders the grid is NOT yet seen live; this guard
+  // costs nothing if it does not.)
+  function lobbyJoinButtonVisible() {
+    for (const b of document.querySelectorAll("button")) {
+      if (b.closest("#" + HOST_ID)) continue;
+      if (/^\s*join call\s*$/i.test(b.textContent || "") && b.offsetParent !== null) return true;
+    }
+    return false;
+  }
+
   function checkCallPresence() {
-    setCallState(!!document.querySelector(CALL_ROOT_SELECTOR));
+    setCallState(!!document.querySelector(CALL_ROOT_SELECTOR) && !lobbyJoinButtonVisible());
   }
 
   // === re-mount seam ===

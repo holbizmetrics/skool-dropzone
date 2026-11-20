@@ -551,12 +551,16 @@ function bytesEqual(a, b) {
   // --- U8 roster: selectors + loud failure (fake DOM, no jsdom dependency) ---
   {
     const R = require(path.join(__dirname, "..", "content", "roster.js"));
-    const el = (cls, kids = [], text = "") => ({
-      cls, kids, textContent: text,
+    const el = (cls, kids = [], text = "", attrs = {}) => ({
+      cls, kids, children: kids, textContent: text,
       matches(sel) {
         return sel.split(",").some((x) => {
           x = x.trim();
-          return x.startsWith("[class*=") ? cls.includes(x.slice(9, -2)) : x === "." + cls;
+          if (x.startsWith("[class*=")) return cls.includes(x.slice(9, -2));
+          // Bare attribute-presence chains, e.g. [data-columns][data-rows][data-ratio]
+          const attrNames = x.match(/^(\[[a-z-]+\])+$/) && x.slice(1, -1).split("][");
+          if (attrNames) return attrNames.every((a) => a in attrs);
+          return x === "." + cls;
         });
       },
       querySelectorAll(sel) {
@@ -580,6 +584,20 @@ function bytesEqual(a, b) {
     check("roster NEGATIVE: stale selector reads as 'out of date', never as an empty roster", r3.source === "none" && r3.names.length === 0 && /out of date/.test(R.describe(r3)) && /found 2/.test(R.describe(r3)));
     const r4 = R.read(el("root", []));
     check("roster NEGATIVE: no tiles at all says so", r4.source === "none" && /no participant tiles/.test(R.describe(r4)));
+    // Agora generation (live chain 2026-11-20): grid[data-*] > tile wrapper > tile > label.sc-3feb84fe-4 > span
+    const gridAttrs = { "data-columns": "2", "data-rows": "1", "data-ratio": "4:3" };
+    const agoraTile = (name, labelCls = "sc-3feb84fe-4 llFgYO") =>
+      el("sc-10c7f5d7-2 SbqmC", [el("sc-3feb84fe-0 kFrJTv", name == null ? [] : [el(labelCls, [el("span", [], name)], name)])]);
+    const r5 = R.read(el("root", [el("sc-10c7f5d7-0 Wdaxo", [agoraTile("Holger Morlok"), agoraTile(" Ty  Wells")], "", gridAttrs)]));
+    check("roster AGORA: names read from grid tiles via the label component class", JSON.stringify(r5.names) === JSON.stringify(["Holger Morlok", "Ty Wells"]) && r5.source === "video-tiles" && r5.tileCount === 2);
+    // NEGATIVE: Skool rebuilt the label component (new sc- id) - tiles still found, names not: must say out of date.
+    const r6 = R.read(el("root", [el("sc-10c7f5d7-0 Wdaxo", [agoraTile("Holger Morlok", "sc-99999999-4 zzz")], "", gridAttrs)]));
+    check("roster AGORA NEGATIVE: renamed label reads 'out of date' with the tile count", r6.source === "none" && /out of date/.test(R.describe(r6)) && /found 1/.test(R.describe(r6)));
+    // NEGATIVE: a div with only SOME of the data attributes is not the grid.
+    const r7 = R.read(el("root", [el("x", [agoraTile("Holger Morlok")], "", { "data-columns": "1" })]));
+    check("roster AGORA NEGATIVE: partial data-attribute match is not a grid", r7.source === "none" && r7.tileCount === 0);
+    const panelSrcA = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    check("call detection: Agora grid selector + lobby JOIN CALL guard wired", /CALL_ROOT_SELECTOR = "[^"]*\[data-columns\]\[data-rows\]\[data-ratio\]/.test(panelSrcA) && /!lobbyJoinButtonVisible\(\)/.test(panelSrcA));
     const csv = R.toCSV(['=HYPERLINK("x")', 'Ann "A" B'], "2026-10-31T12:00:00Z");
     check("roster CSV: formula injection neutralised + quotes doubled", csv.includes(`"'=HYPERLINK(""x"")"`) && csv.includes('"Ann ""A"" B"'));
     const panelSrcR = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");

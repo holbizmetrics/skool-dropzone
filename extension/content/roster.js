@@ -23,19 +23,41 @@
 (function () {
   "use strict";
 
-  // Stream Video React SDK class names (Skool's meeting UI is Stream). The name
-  // element is the SDK default; the [class*=] forms survive a BEM-prefix change.
+  // Two generations of Skool's meeting UI:
+  //   - Stream Video React SDK (verified live 2026-05-20): BEM class names below.
+  //   - Agora (verified live 2026-11-20, console: "AgoraRTC client v4.24.8"; zero
+  //     str-video classes on the page). Tiles live in a grid that carries STABLE
+  //     data attributes: [data-columns][data-rows][data-ratio]. Each direct child
+  //     of the grid is one participant tile. The name label is a styled-components
+  //     class: "sc-3feb84fe-4 <hash>". Only the component half (sc-3feb84fe-4) is
+  //     matched; it still changes when Skool rebuilds that component, and when it
+  //     does the tiles are found but nameless, which reads "out of date" (loud).
+  // Live chain 2026-11-20: grid > DIV.sc-10c7f5d7-2 > DIV.sc-3feb84fe-0 >
+  //   DIV.sc-3feb84fe-4 > SPAN "Holger Morlok". One participant only: whether a
+  //   grid child is exactly one tile with several people is NOT yet seen live.
   const SEL = {
     listItem: ".str-video__participant-listing-item",
     tile: ".str-video__participant-view",
+    grid: "[data-columns][data-rows][data-ratio]",
     name: [
       ".str-video__participant-details__name",
       ".str-video__participant-listing-item__display-name",
       "[class*='participant-details__name']",
       "[class*='display-name']",
       "[class*='participant-name']",
+      "[class*='sc-3feb84fe-4']",
     ],
   };
+
+  // Participant tiles from either UI generation. Agora tiles have no class of
+  // their own, so they are the grid's direct children.
+  function findTiles(doc) {
+    const tiles = Array.from(doc.querySelectorAll(SEL.tile));
+    for (const grid of doc.querySelectorAll(SEL.grid)) {
+      for (const child of Array.from(grid.children || [])) tiles.push(child);
+    }
+    return tiles;
+  }
 
   function cleanName(raw) {
     if (typeof raw !== "string") return "";
@@ -79,7 +101,7 @@
     if (list.names.length) {
       return { names: uniq(list.names), source: "people-list", tileCount: list.count, unnamed: list.unnamed, partial: false };
     }
-    const tiles = collect(Array.from(doc.querySelectorAll(SEL.tile)));
+    const tiles = collect(findTiles(doc));
     return {
       names: uniq(tiles.names),
       source: tiles.names.length ? "video-tiles" : "none",
@@ -120,7 +142,7 @@
     return rows.join("\r\n");
   }
 
-  const api = { read, describe, toText, toCSV, cleanName, SEL };
+  const api = { read, describe, toText, toCSV, cleanName, findTiles, SEL };
   if (typeof window !== "undefined") window.SDZRoster = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

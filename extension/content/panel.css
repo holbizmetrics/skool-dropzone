@@ -12,7 +12,9 @@
 #skool-dropzone-marker {
   position: fixed;
   right: 12px;
-  bottom: 12px;
+  /* Above Skool's bottom call-controls bar (~80px): at bottom:12px the chip
+     sat on top of Skool's own chat button (operator screenshot, 2026-11-20). */
+  bottom: 92px;
   z-index: 2147483646;
   /* Blue + full opacity: a dark translucent chip was invisible on Skool's
      near-black meeting UI — "how do I get the panel back?" is a bug, not a
@@ -44,7 +46,10 @@
   right: 0;
   width: 360px;
   max-width: 100vw;
-  height: 100vh;
+  /* Stop above Skool's bottom call-controls bar (~80px) so its people + chat
+     buttons stay clickable while the panel is open (operator screenshots,
+     2026-11-20: full-height panel covered them). */
+  bottom: 88px;
   z-index: 2147483647;
   /* U3: the design is light-only; stop the UA / dark shell from half-inverting it
      (backgrounds flipped, default-coloured text did not -> white-on-white polls). */
