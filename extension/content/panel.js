@@ -72,7 +72,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.4</span>
+          <span class="sdz-version">v0.8.5</span>
         </div>
         <button class="sdz-close" type="button" title="Close" aria-label="Close panel">×</button>
       </header>
@@ -281,6 +281,19 @@
       return;
     }
 
+    // With a passphrase, Join room connects automatically through Skool's own
+    // call channel (skool-bridge.js + auto-connect.js). No channel = say so and
+    // point at the code path; never fall back silently to the localhost relay,
+    // which only ever works between two tabs on one computer.
+    if (passphrase) {
+      if (!skoolBus.id) {
+        setStatus("error", "Skool's call channel was not found (Skool may have changed its page). Use \"Connect by code\" below instead.");
+        return;
+      }
+      await startAuto(passphrase);
+      return;
+    }
+
     setStatus("connecting", "Connecting…");
     try {
       await window.SDZTransport.init({
@@ -300,6 +313,69 @@
     } catch (e) {
       setStatus("error", "Could not join: " + (e && e.message ? e.message : e));
     }
+  }
+
+  // === automatic-connect seam (Skool's own call channel carries the codes) ===
+  // Rule this owns: the bridge (page world) is untrusted input. Only messages
+  // shaped {__sdz:1,type,...} from this window and origin are read, and the
+  // protocol (SDZAuto.parse) re-validates every payload. A forged message can at
+  // worst open a WebRTC link to a stranger, who still cannot read anything
+  // without the passphrase key.
+  const AUTO_HELLO_EVERY_MS = 20000;
+  const skoolBus = { id: "", lastError: "" };
+  let auto = null;
+  let autoHelloTimer = null;
+
+  window.addEventListener("message", (ev) => {
+    if (ev.source !== window || ev.origin !== location.origin) return;
+    const d = ev.data;
+    if (!d || d.__sdz !== 1 || typeof d.type !== "string") return;
+    if (d.type === "sdz-bus-ready" && typeof d.id === "string") {
+      skoolBus.id = d.id;
+    } else if (d.type === "sdz-bus-gone") {
+      skoolBus.id = "";
+    } else if (d.type === "sdz-bus-error") {
+      skoolBus.lastError = String(d.reason || "");
+      if (auto) setStatus("error", "Skool's call channel refused a message: " + skoolBus.lastError);
+    } else if (d.type === "sdz-bus-in" && auto && typeof d.payload === "string" && typeof d.from === "string") {
+      auto.handle(d.payload, d.from);
+    }
+  });
+  // The bridge may have found the channel before this script loaded.
+  window.postMessage({ __sdz: 1, type: "sdz-bus-ask" }, location.origin);
+
+  async function startAuto(pass) {
+    if (!window.SDZAuto || !window.SDZManual) {
+      setStatus("error", "Automatic connecting is unavailable (reload the extension). Use \"Connect by code\" below.");
+      return;
+    }
+    const room = (location.pathname.match(/\/live\/([^/?#]+)/) || [])[1] || "unknown";
+    let tag;
+    try {
+      tag = await window.SDZCrypto.roomFingerprint(pass, room);
+    } catch (e) {
+      setStatus("error", "Could not prepare the room: " + (e && e.message ? e.message : e));
+      return;
+    }
+    const opts = { passphrase: pass, onMessage: onRemoteMessage, onStatus: onTransportStatus };
+    auto = window.SDZAuto.create({
+      myId: skoolBus.id,
+      tag,
+      publish: (payload) => window.postMessage({ __sdz: 1, type: "sdz-bus-out", payload }, location.origin),
+      manual: {
+        offer: (peerId) => window.SDZManual.createOffer(Object.assign({ pendingKey: "auto:" + peerId, remoteId: "auto-" + peerId }, opts)),
+        accept: (peerId, code) => window.SDZManual.acceptOffer(code, Object.assign({ remoteId: "auto-" + peerId }, opts)),
+        finish: (peerId, code) => window.SDZManual.acceptAnswer(code, { pendingKey: "auto:" + peerId }),
+      },
+      log: (text) => console.warn("[skool-dropzone auto-connect]", text),
+    });
+    markCodeSession(pass);
+    const join = codeEl("sdz-join");
+    if (join) join.textContent = "Joined";
+    setStatus("waiting", "🔒 Joined. Looking for other members with the same passphrase in this call…");
+    auto.hello();
+    // Late joiners announce themselves; this repeat only covers a lost message.
+    autoHelloTimer = setInterval(() => auto && auto.hello(), AUTO_HELLO_EVERY_MS);
   }
 
   // === connect-by-code seam (serverless P2P between two computers) ===

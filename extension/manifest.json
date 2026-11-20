@@ -1,22 +1,58 @@
 {
   "manifest_version": 3,
   "name": "skool-dropzone",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Member-side companion for Skool meetings — chat-with-files, whiteboard, instant presentation, polls & reactions, breakout rooms, one-click meeting archive; E2EE (mic-transcription v0 excepted and labeled). Phase 11.",
   "background": {
     "service_worker": "background/service-worker.js"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["http://localhost/*", "https://localhost/*"],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "https://localhost/*"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "content_scripts": [
     {
-      "matches": ["https://www.skool.com/live/*", "https://skool.com/live/*"],
-      "js": ["content/crypto.js", "content/transport.js", "content/manual-signal.js", "content/present.js", "content/whiteboard.js", "content/transcribe.js", "content/engage.js", "content/archive.js", "content/roster.js", "content/panel.js"],
-      "css": ["content/panel.css", "content/present.css", "content/whiteboard.css"],
+      "matches": [
+        "https://www.skool.com/live/*",
+        "https://skool.com/live/*"
+      ],
+      "js": [
+        "content/crypto.js",
+        "content/transport.js",
+        "content/manual-signal.js",
+        "content/present.js",
+        "content/whiteboard.js",
+        "content/transcribe.js",
+        "content/engage.js",
+        "content/archive.js",
+        "content/roster.js",
+        "content/auto-connect.js",
+        "content/panel.js"
+      ],
+      "css": [
+        "content/panel.css",
+        "content/present.css",
+        "content/whiteboard.css"
+      ],
       "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://www.skool.com/live/*",
+        "https://skool.com/live/*"
+      ],
+      "js": [
+        "content/skool-bridge.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN",
       "all_frames": false
     }
   ],

@@ -22,7 +22,11 @@
 
 (() => {
   const PREFIX = "SDZ1."; // human-recognizable connect-code marker + version
-  let pendingPc = null; // initiator holds its pc between createOffer + acceptAnswer
+  // Initiator holds its pc between createOffer + acceptAnswer. Keyed per peer so
+  // automatic connecting (auto-connect.js) can have several offers in flight;
+  // the hand-pasted path uses the single default key, exactly as before.
+  const DEFAULT_PENDING = "manual";
+  const pendingPcs = new Map();
 
   function rtcConfig() {
     return (window.SDZTransport && window.SDZTransport.rtcConfig) || { iceServers: [] };
@@ -84,14 +88,20 @@
   // --- the three-step handshake ---
 
   // Initiator step 1 — returns the OFFER code to hand to the other person.
-  async function createOffer({ passphrase, room, onMessage, onStatus } = {}) {
+  async function createOffer({ passphrase, room, onMessage, onStatus, pendingKey, remoteId } = {}) {
     const pc = new RTCPeerConnection(rtcConfig());
-    pendingPc = pc;
+    const old = pendingPcs.get(pendingKey || DEFAULT_PENDING);
+    if (old && old !== pc) {
+      try {
+        old.close();
+      } catch {}
+    }
+    pendingPcs.set(pendingKey || DEFAULT_PENDING, pc);
     const dc = pc.createDataChannel("sdz");
     await window.SDZTransport.attachManualPeer({
       pc,
       dc,
-      remoteId: newRemoteId(),
+      remoteId: remoteId || newRemoteId(),
       passphrase,
       room,
       onMessage,
@@ -104,7 +114,7 @@
   }
 
   // Joiner — paste the OFFER code, get back an ANSWER code to send to the initiator.
-  async function acceptOffer(offerCode, { passphrase, room, onMessage, onStatus } = {}) {
+  async function acceptOffer(offerCode, { passphrase, room, onMessage, onStatus, remoteId } = {}) {
     const { type, sdp } = decodeConnectCode(offerCode);
     if (type !== "offer") {
       throw new Error("That's an ANSWER code — the OFFER goes here. Swap who pastes what.");
@@ -115,7 +125,7 @@
       window.SDZTransport.attachManualPeer({
         pc,
         dc: e.channel,
-        remoteId: newRemoteId(),
+        remoteId: remoteId || newRemoteId(),
         passphrase,
         room,
         onMessage,
@@ -130,16 +140,18 @@
   }
 
   // Initiator step 2 — paste the ANSWER code to finish connecting.
-  async function acceptAnswer(answerCode) {
-    if (!pendingPc) {
+  async function acceptAnswer(answerCode, { pendingKey } = {}) {
+    const key = pendingKey || DEFAULT_PENDING;
+    const pc = pendingPcs.get(key);
+    if (!pc) {
       throw new Error("No pending connection — create an offer first.");
     }
     const { type, sdp } = decodeConnectCode(answerCode);
     if (type !== "answer") {
       throw new Error("That's an OFFER code — the ANSWER goes here.");
     }
-    await pendingPc.setRemoteDescription({ type: "answer", sdp });
-    pendingPc = null;
+    await pc.setRemoteDescription({ type: "answer", sdp });
+    pendingPcs.delete(key);
   }
 
   window.SDZManual = {

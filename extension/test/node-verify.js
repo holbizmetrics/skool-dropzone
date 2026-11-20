@@ -627,6 +627,109 @@ function bytesEqual(a, b) {
     check("roster local-only: copyNames never touches the transport", copyFn.length > 0 && !/SDZTransport|\.send\(/.test(copyFn));
   }
 
+  // --- automatic connecting over Skool's call channel (protocol only; fake bus + fake handshake) ---
+  {
+    const A = require(path.join(__dirname, "..", "content", "auto-connect.js"));
+    // A fake Skool channel: publish delivers to every OTHER member, in order, asynchronously.
+    function makeBus() {
+      const members = [];
+      const log = [];
+      return {
+        log,
+        join(id, onMsg) { members.push({ id, onMsg }); },
+        publishFrom(id) {
+          return (payload) => {
+            log.push({ from: id, msg: JSON.parse(payload) });
+            members.filter((m) => m.id !== id).forEach((m) => setImmediate(() => m.onMsg(payload, id)));
+          };
+        },
+      };
+    }
+    // Fake handshake: an offer code names its maker, an answer names both sides.
+    function makeManual(myId, links) {
+      return {
+        offer: async (peer) => `SDZ1.offer:${myId}>${peer}`,
+        accept: async (peer, code) => {
+          if (code !== `SDZ1.offer:${peer}>${myId}`) throw new Error("wrong offer " + code);
+          return `SDZ1.answer:${myId}>${peer}`;
+        },
+        finish: async (peer, code) => {
+          if (code !== `SDZ1.answer:${peer}>${myId}`) throw new Error("wrong answer " + code);
+          links.push([myId, peer].sort().join("-"));
+        },
+      };
+    }
+    const settle = () => new Promise((r) => setTimeout(r, 30));
+    async function room(members, tagOf, order) {
+      const bus = makeBus();
+      const links = [];
+      const nodes = {};
+      for (const id of members) {
+        nodes[id] = A.create({ myId: id, tag: tagOf(id), publish: bus.publishFrom(id), manual: makeManual(id, links) });
+        bus.join(id, (p, from) => nodes[id].handle(p, from));
+      }
+      for (const id of order || members) { nodes[id].hello(); await settle(); }
+      await settle();
+      return { bus, links: [...new Set(links)].sort(), allLinks: links, nodes };
+    }
+
+    const r1 = await room(["u2", "u1"], () => "TAG");
+    check("auto: two members with the same passphrase connect (one link)", JSON.stringify(r1.links) === '["u1-u2"]');
+    const offers1 = r1.bus.log.filter((x) => x.msg.t === "offer");
+    check("auto: exactly ONE side offers, the lower id (no glare)", offers1.length === 1 && offers1[0].from === "u1");
+
+    // Both say hello at the same moment (no settle in between) - still one offer, one link.
+    const busG = makeBus(); const linksG = []; const nG = {};
+    for (const id of ["u1", "u2"]) { nG[id] = A.create({ myId: id, tag: "T", publish: busG.publishFrom(id), manual: makeManual(id, linksG) }); busG.join(id, (p, f) => nG[id].handle(p, f)); }
+    nG.u1.hello(); nG.u2.hello(); await settle(); await settle();
+    check("auto: simultaneous hello still gives one offer and one link", busG.log.filter((x) => x.msg.t === "offer").length === 1 && linksG.length === 1);
+
+    const r3 = await room(["a", "b", "c"], () => "T");
+    check("auto: three members form a full mesh (3 links)", JSON.stringify(r3.links) === '["a-b","a-c","b-c"]');
+    check("auto: no pair is offered twice in a 3-mesh", r3.bus.log.filter((x) => x.msg.t === "offer").length === 3);
+
+    // NEGATIVE: different passphrase (= different tag) never gets an offer.
+    const r4 = await room(["a", "b"], (id) => (id === "a" ? "TAG-1" : "TAG-2"));
+    check("auto NEGATIVE: different passphrase -> no offer, no link", r4.links.length === 0 && r4.bus.log.every((x) => x.msg.t === "hello"));
+
+    // NEGATIVE: a message addressed to someone else is ignored.
+    const linksX = [];
+    let offeredToMe = 0;
+    const victim = A.create({ myId: "z", tag: "T", publish: () => {}, manual: { offer: async () => "", accept: async () => { offeredToMe++; return "x"; }, finish: async () => {} } });
+    await victim.handle(JSON.stringify({ v: 1, t: "offer", tag: "T", to: "someone-else", code: "SDZ1.x" }), "a");
+    check("auto NEGATIVE: an offer addressed to someone else is ignored", offeredToMe === 0 && victim.peers.size === 0);
+
+    // NEGATIVE: malformed, wrong version, oversized code, own echo.
+    const bad = [
+      ["not json", "a"],
+      [JSON.stringify({ v: 2, t: "hello", tag: "T" }), "a"],
+      [JSON.stringify({ v: 1, t: "offer", tag: "T", to: "z", code: "x".repeat(A.MAX_CODE + 1) }), "a"],
+      [JSON.stringify({ v: 1, t: "hello", tag: "T" }), "z"],
+    ];
+    for (const [p, f] of bad) await victim.handle(p, f);
+    check("auto NEGATIVE: malformed / wrong version / oversized / own echo all ignored", offeredToMe === 0 && victim.peers.size === 0);
+
+    // An answer nobody asked for must not complete anything.
+    let finished = 0;
+    const lone = A.create({ myId: "b", tag: "T", publish: () => {}, manual: { offer: async () => "c", accept: async () => "a", finish: async () => { finished++; } } });
+    await lone.handle(JSON.stringify({ v: 1, t: "answer", tag: "T", to: "b", code: "SDZ1.y" }), "a");
+    check("auto NEGATIVE: an unrequested answer completes nothing", finished === 0);
+
+    const panelSrcB = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    const manB = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
+    const mainWorld = manB.content_scripts.find((c) => c.world === "MAIN");
+    const iso = manB.content_scripts[0].js;
+    check("auto wired: bridge runs in the page world on /live/ only; auto-connect loads before panel",
+      !!mainWorld && JSON.stringify(mainWorld.js) === '["content/skool-bridge.js"]' && mainWorld.matches.every((m) => m.includes("/live/")) &&
+      iso.indexOf("content/auto-connect.js") > -1 && iso.indexOf("content/auto-connect.js") < iso.indexOf("content/panel.js"));
+    check("auto wired: Join room with a passphrase uses the Skool channel, and says so when it is missing",
+      /if \(passphrase\) \{[\s\S]*?skoolBus\.id[\s\S]*?Connect by code[\s\S]*?startAuto\(passphrase\)/.test(panelSrcB));
+    const bridgeSrc = fs.readFileSync(path.join(__dirname, "..", "content", "skool-bridge.js"), "utf8");
+    check("bridge: only ever subscribes to and publishes on our own topic",
+      /const TOPIC = "sdz"/.test(bridgeSrc) && (bridgeSrc.match(/\.onMessage\(/g) || []).length === 1 && /onMessage\(TOPIC,/.test(bridgeSrc) &&
+      (bridgeSrc.match(/\.publish\(/g) || []).length === 1 && /publish\(TOPIC,/.test(bridgeSrc));
+  }
+
   console.log(`\n=== ${pass} passed, ${fail} failed ===`);
   if (fail) {
     console.log("FAILURES:", fails.join("; "));
