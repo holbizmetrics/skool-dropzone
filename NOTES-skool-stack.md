@@ -1,6 +1,33 @@
 # Skool stack — reverse-engineering notes
 
-Captured 2026-05-20 from analysis of the competing **Skool Extensions** extension (`jinaapgibcgkfaffmpkhdikncmfhpfne` v1.4.8, Chrome Web Store). Their code reveals Skool's underlying tech choices, which inform our injection strategy.
+> **CURRENT (2026-11-20, live meeting + Skool Extensions v1.9.5): Skool's live calls run on AGORA, not Stream.**
+> Everything below the line "Historical (Stream era)" describes the May 2026 stack and is kept for reference only.
+> Nothing with a `str-video` class exists on the page any more (`[class*="str-video"]` count = 0).
+
+## Current stack (Agora) — verified 2026-11-20
+
+| What | Value | How we know |
+|---|---|---|
+| Video SDK | **AgoraRTC client v4.24.8**, `mode: live`, codec vp8 | Skool's own console log in a live call |
+| Call detection | tile grid with stable data attributes `[data-columns][data-rows][data-ratio]` | DOM probe in a live call; used by `panel.js` `CALL_ROOT_SELECTOR` |
+| Lobby | visible "JOIN CALL" button; panel does not open while it shows | live: panel opened only after joining |
+| Participant tile | direct child of the grid | DOM probe (one participant only — multi-person not yet seen) |
+| Name label | styled-components class `sc-3feb84fe-4 <hash>` > `SPAN` | DOM probe; Names copied "Holger Morlok" exactly. Only the `sc-3feb84fe-4` half is matched; the hash half rotates |
+| In-call message channel | an object in Skool's React tree with `publish(topic, text)`, `onMessage(topic, cb)` (returns unsubscribe), `getState().status === "connected"`, `.uid`, `.channel`; messages arrive as `{ payload, publisher }` | read in Skool Extensions 1.9.5 `content/raisehand-bridge.js` (they use topic `"skt"`); our own `skool-bridge.js` finds it live (topic `"sdz"`) |
+| Participant names (full list) | `profiles` (uid -> { name }) in the same React tree | Skool Extensions 1.9.5; not yet used by us |
+| Per-speaker audio | Agora connection `getClient().remoteUsers[].audioTrack` | Skool Extensions 1.9.5 records each speaker from these; not yet used by us |
+| One connection per account | a second tab of the SAME account cuts the first: `publish failed: Signaling is not connected`; both tabs share one call id | live, two tabs, 2026-11-20 |
+
+Consequences for this project:
+- Every Stream selector and the Stream-based signaling plan in `SIGNALING-SKOOL-NATIVE-SPIKE.md` are dead. The Skool-native signaling idea now lives on the Agora channel above (`skool-bridge.js` + `auto-connect.js`, v0.8.5).
+- Testing automatic connecting needs **two different Skool accounts**. Connect-by-code works with one.
+- The channel is found by walking React internals. A Skool rebuild can break it; the panel then says "Skool's call channel was not found" and connect-by-code remains.
+
+---
+
+## Historical (Stream era, May 2026)
+
+Captured 2026-05-20 from analysis of the competing **Skool Extensions** extension (`jinaapgibcgkfaffmpkhdikncmfhpfne` v1.4.8, Chrome Web Store). Their code revealed Skool's then tech choices.
 
 ## Skool's tech stack
 

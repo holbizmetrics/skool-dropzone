@@ -1,5 +1,10 @@
 # Spike — serverless signaling via the Skool/Stream meeting (verdict)
 
+> **SUPERSEDED 2026-11-20.** Skool moved its calls from Stream to Agora, so the Stream
+> `sendCustomEvent` path below no longer exists. The same idea now runs on Skool's
+> Agora in-call channel: `extension/content/skool-bridge.js` + `auto-connect.js`
+> (v0.8.5). Current facts: `NOTES-skool-stack.md` § Current stack (Agora).
+
 **Question:** Can a Chrome MV3 extension piggyback WebRTC signaling (SDP/ICE) on
 the Skool/Stream meeting itself, so two participants connect peer-to-peer with
 **no signaling server we run** (and therefore no traffic cost to us)?
