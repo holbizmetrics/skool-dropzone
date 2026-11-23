@@ -72,6 +72,24 @@ would have the same id. Log into the second Skool account on computer 2.
 
 ---
 
+## Test D — in any real call, even if only you run skool-dropzone
+
+Nobody else in the call sees any of this.
+
+- [ ] Type a passphrase (e.g. `test123`) → **Join room** → shows **"🔒 Joined. Looking for other members…"**
+      and no error. (Proves Skool's call channel is found and accepts our messages in a full call.
+      Our messages use our own topic "sdz", which Skool's app ignores.) If an error appears: write it down.
+- [ ] **💾 Archive** → an HTML file of the meeting is saved on your computer and opens.
+- [ ] Look: the panel covers the right column of tiles. OK as it is, or should the panel push the
+      video aside instead? (Quick fixes today: the grip makes it narrower, ⇄ moves it to the other side.)
+
+**Result D:** ☐ passed ☐ failed — message: ______________________
+
+Already passed 2026-11-23 (real call, 7 people, v0.8.7): **👥 Names** copied all 7 names from
+Skool's call data, including one person with no visible tile.
+
+---
+
 ## Also look at, while two people are in the call
 
 - [ ] **👥 Names**: does it list both names?
