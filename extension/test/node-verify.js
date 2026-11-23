@@ -730,6 +730,29 @@ function bytesEqual(a, b) {
       (bridgeSrc.match(/\.publish\(/g) || []).length === 1 && /publish\(TOPIC,/.test(bridgeSrc));
   }
 
+  // --- Names from Skool's call data (via the bridge) ---
+  {
+    const R2 = require(path.join(__dirname, "..", "content", "roster.js"));
+    const call = [{ uid: "a", name: "Holger  Morlok" }, { uid: "b", name: "Ty Wells" }, { uid: "c", name: "" }];
+    const tilesOnly = { querySelectorAll: () => [] };
+    const rc = R2.read(tilesOnly, call);
+    check("names: call data is used first, cleaned, complete (not partial)",
+      rc.source === "call-data" && JSON.stringify(rc.names) === '["Holger Morlok","Ty Wells"]' && rc.partial === false && rc.unnamed === 1 &&
+      /everyone in the call/.test(R2.describe(rc)) && !/may miss people/.test(R2.describe(rc)));
+    // NEGATIVE: an empty or nameless call list must not hide the tile fallback.
+    const rEmpty = R2.read(tilesOnly, []);
+    const rNameless = R2.read(tilesOnly, [{ uid: "x", name: "" }]);
+    check("names NEGATIVE: empty / nameless call data falls back to the page, never reports 'nobody'",
+      rEmpty.source === "none" && rNameless.source === "none" && /no participant tiles/.test(R2.describe(rNameless)));
+    const bsrc = fs.readFileSync(path.join(__dirname, "..", "content", "skool-bridge.js"), "utf8");
+    const postRosterFn = (bsrc.split("function postRoster(")[1] || "").split("\n  }\n")[0];
+    check("bridge: only uid + name leave the page world; screen-share entries dropped",
+      /list\.push\(\{ uid: [^}]*name \}\)/.test(postRosterFn) && /indexOf\("screen-"\) === 0\) continue/.test(postRosterFn) && !/email|metadata/.test(postRosterFn));
+    const psrc = fs.readFileSync(path.join(__dirname, "..", "content", "panel.js"), "utf8");
+    check("names wired: panel stores the bridge roster and passes it to Names",
+      /d\.type === "sdz-roster"/.test(psrc) && /SDZRoster\.read\(document, skoolRoster\)/.test(psrc));
+  }
+
   // --- layout: side, width, SDZ button position (U9 + U1) ---
   {
     const Lay = require(path.join(__dirname, "..", "content", "layout.js"));

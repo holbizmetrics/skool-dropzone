@@ -186,7 +186,7 @@
         <div class="sdz-title">
           <span class="sdz-dot" data-state="idle"></span>
           skool-dropzone
-          <span class="sdz-version">v0.8.6</span>
+          <span class="sdz-version">v0.8.7</span>
         </div>
         <div class="sdz-header-actions">
           <button class="sdz-dock" type="button" title="Move the panel to the left side" aria-label="Move the panel to the other side">⇄</button>
@@ -442,6 +442,7 @@
   // without the passphrase key.
   const AUTO_HELLO_EVERY_MS = 20000;
   const skoolBus = { id: "", lastError: "" };
+  let skoolRoster = []; // [{ uid, name }] from Skool's call data, via skool-bridge.js; names only
   let auto = null;
   let autoHelloTimer = null;
 
@@ -456,6 +457,8 @@
     } else if (d.type === "sdz-bus-error") {
       skoolBus.lastError = String(d.reason || "");
       if (auto) setStatus("error", "Skool's call channel refused a message: " + skoolBus.lastError);
+    } else if (d.type === "sdz-roster" && Array.isArray(d.list)) {
+      skoolRoster = d.list.filter((x) => x && typeof x.uid === "string" && typeof x.name === "string").slice(0, 500);
     } else if (d.type === "sdz-bus-in" && auto && typeof d.payload === "string" && typeof d.from === "string") {
       auto.handle(d.payload, d.from);
     }
@@ -1230,7 +1233,7 @@
   // system line to THIS panel. Never sent over the transport.
   function copyNames() {
     if (!window.SDZRoster) return;
-    const r = window.SDZRoster.read(document);
+    const r = window.SDZRoster.read(document, skoolRoster);
     const status = window.SDZRoster.describe(r);
     if (!r.names.length) {
       addMessage({ kind: "system", body: "👥 " + status });

@@ -54,21 +54,51 @@
     return !!v && typeof v === "object" && typeof v.publish === "function" && typeof v.onMessage === "function" && typeof v.getState === "function";
   }
 
-  function findChannel() {
+  // Skool's participant data: an object of call id -> { name, ... } that sits
+  // next to a `toggles` prop (same shape check as Skool Extensions 1.9.5).
+  function looksLikeProfiles(props) {
+    return !!props.profiles && typeof props.profiles === "object" && !Array.isArray(props.profiles) && !!props.toggles;
+  }
+
+  // One walk finds both things. Returns { channel, profiles } (either may be null).
+  function scan() {
+    const out = { channel: null, profiles: null };
     const root = reactRoot();
-    if (!root) return null;
+    if (!root) return out;
     const stack = [root];
     let seen = 0;
-    while (stack.length && seen < SCAN_LIMIT) {
+    while (stack.length && seen < SCAN_LIMIT && !(out.channel && out.profiles)) {
       const node = stack.pop();
       seen++;
       if (!node) continue;
       const props = node.memoizedProps;
-      if (props && typeof props === "object" && looksLikeChannel(props.value)) return props.value;
+      if (props && typeof props === "object") {
+        if (!out.channel && looksLikeChannel(props.value)) out.channel = props.value;
+        if (!out.profiles && looksLikeProfiles(props)) out.profiles = props.profiles;
+      }
       if (node.sibling) stack.push(node.sibling);
       if (node.child) stack.push(node.child);
     }
-    return null;
+    return out;
+  }
+
+  // Only NAMES leave the page world, never the rest of a profile. Screen-share
+  // pseudo-participants ("screen-<id>") are not people and are dropped.
+  const MAX_ROSTER = 500;
+  let lastRosterKey = "";
+  function postRoster(profiles) {
+    const list = [];
+    for (const uid of Object.keys(profiles)) {
+      if (list.length >= MAX_ROSTER) break;
+      if (uid.indexOf("screen-") === 0) continue;
+      const p = profiles[uid];
+      const name = p && typeof p.name === "string" ? p.name.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+      list.push({ uid: String(uid).slice(0, 64), name });
+    }
+    const key = JSON.stringify(list);
+    if (key === lastRosterKey) return;
+    lastRosterKey = key;
+    post({ type: "sdz-roster", list });
   }
 
   function detach() {
@@ -99,7 +129,9 @@
     }
     let found = null;
     try {
-      found = findChannel();
+      const s = scan();
+      found = s.channel;
+      if (s.profiles) postRoster(s.profiles);
     } catch (e) {
       found = null;
     }
@@ -137,6 +169,7 @@
     if (d.type === "sdz-bus-ask") {
       // the extension (re)loaded and wants to know whether we are ready
       if (readyId) post({ type: "sdz-bus-ready", id: readyId });
+      lastRosterKey = ""; // the next tick re-sends the names to the freshly loaded extension
       return;
     }
     if (d.type !== "sdz-bus-out" || typeof d.payload !== "string" || d.payload.length > MAX_OUT) return;

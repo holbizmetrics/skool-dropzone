@@ -95,7 +95,22 @@
     return { names, unnamed, count: els.length };
   }
 
-  function read(root) {
+  // callList: [{ uid, name }] from Skool's own participant data, relayed by
+  // skool-bridge.js (2026-11-20). Preferred over everything on screen: it holds
+  // everyone in the call, whether or not their tile is on the current page or
+  // Skool's participant list is open.
+  function read(root, callList) {
+    if (Array.isArray(callList) && callList.length) {
+      const names = [];
+      let unnamed = 0;
+      for (const p of callList) {
+        const n = cleanName(p && p.name);
+        if (n) names.push(n); else unnamed++;
+      }
+      if (names.length) {
+        return { names: uniq(names), source: "call-data", tileCount: callList.length, unnamed, partial: false };
+      }
+    }
     const doc = root || document;
     const list = collect(Array.from(doc.querySelectorAll(SEL.listItem)));
     if (list.names.length) {
@@ -118,7 +133,8 @@
         ? `Roster unavailable: found ${r.tileCount} participant tile(s) but no readable name in any. Skool's markup changed; the name selector in roster.js is out of date.`
         : "Roster unavailable: no participant tiles found on this page (is the meeting view open?).";
     }
-    const from = r.source === "people-list" ? "Skool's People list" : "the video tiles";
+    const from =
+      r.source === "call-data" ? "Skool's call data (everyone in the call)" : r.source === "people-list" ? "Skool's People list" : "the video tiles";
     let s = `${r.names.length} name(s) from ${from}`;
     if (r.unnamed) s += `; ${r.unnamed} entr${r.unnamed === 1 ? "y" : "ies"} had no readable name and were skipped`;
     if (r.partial) s += ". Tiles are paginated, so this may miss people; open Skool's People list for the full roster";
